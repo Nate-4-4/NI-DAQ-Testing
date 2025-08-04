@@ -29,7 +29,7 @@ try:
         axis.relim()
         axis.autoscale_view()
         plt.pause(0.05)
-except KeyboardInterrupt:
+except:
     print("Shutting Down")
 finally:
     task.close()

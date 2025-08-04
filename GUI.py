@@ -1,0 +1,347 @@
+import sys
+import time
+import random
+import queue
+import csv
+from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QComboBox, QPushButton, QFileDialog, QMessageBox, QGroupBox, QGridLayout
+from PyQt5.QtCore import QThread, QTimer, pyqtSignal, pyqtSlot
+import pyqtgraph as pg
+import threading
+import json
+
+# === DAQ Worker Thread (Dummy Data Generator) ===
+class DAQWorker(QThread):
+    def __init__(self, plot_queue, record_queue, record_flag, sample_rate_hz=100):
+        super().__init__()
+        self.plot_queue = plot_queue
+        self.record_queue = record_queue
+        self.record_flag = record_flag
+        self.sample_interval = 1.0 / sample_rate_hz
+        self.running = False
+
+    def run(self):
+        self.running = True
+        while self.running:
+            timestamp = time.time()
+            dummy_data = {
+                'timestamp': timestamp,
+                'channel_1': random.uniform(0, 5),
+                'channel_2': random.uniform(0, 5)
+            }
+            try:
+                self.plot_queue.put_nowait(dummy_data)
+            except queue.Full:
+                print("Warning: Plot queue full, dropping sample.")
+            if(self.record_flag.is_set()):
+                try:
+                    self.record_queue.put_nowait(dummy_data)
+                except queue.Full:
+                    print("Warning: Recording queue full, dropping sample.")
+            time.sleep(self.sample_interval)
+
+    def stop(self):
+        self.running = False
+        self.wait()
+
+# === Recording Worker Thread ===
+class RecordingWorker(QThread):
+    def __init__(self, data_queue, active_flag):
+        super().__init__()
+        self.data_queue = data_queue
+        self.active_flag = active_flag
+        self.running = False
+        self.file = None
+        self.writer = None
+
+    def start_recording(self, filename):
+        try:
+            self.file = open(filename, 'w', newline='')
+        except (OSError, IOError) as e:
+            print(f"Error opening file: {e}")
+            return
+        self.writer = csv.DictWriter(self.file, fieldnames=['timestamp', 'channel_1', 'channel_2'])
+        self.writer.writeheader()
+        self.running = True
+        self.active_flag.set()
+        self.start()
+
+    def run(self):
+        while self.running:
+            while not self.data_queue.empty():
+                sample = self.data_queue.get()
+                try:
+                    self.writer.writerow(sample)
+                except (OSError, IOError, ValueError) as e:
+                    print(f"Error writing to CSV file: {e}")
+                    self.stop_recording()
+                    return
+            time.sleep(0.01)  # Prevent CPU hogging
+
+    def stop_recording(self):
+        self.running = False
+        self.active_flag.clear()
+        self.wait()
+        if self.file:
+            self.file.close()
+            self.file = None
+
+# === Config Tab (Placeholder) ===
+class ConfigTab(QWidget):
+    config_changed = pyqtSignal(dict)
+
+    def __init__(self):
+        super().__init__()
+
+        self.config_data = {
+            'analog': [{'enabled': False, 'mode': 'Ground'} for _ in range(8)],
+            'digital': [{'enabled': False, 'mode': 'Input'} for _ in range(8)]
+        }
+
+        layout = QVBoxLayout()
+
+        # Analog Inputs Group
+        analog_group = QGroupBox("Analog Inputs (AI0 - AI7)")
+        analog_layout = QGridLayout()
+        self.analog_widgets = []
+        for i in range(8):
+            enable_cb = QCheckBox(f"AI{i}")
+            mode_cb = QComboBox()
+            if(i<4):
+                mode_cb.addItems(['Ground', 'Reference']) #AI0-3 can use reference or ground mode
+            else:
+                mode_cb.addItem('Ground') #AI4-7 can only use ground mode
+                mode_cb.setEnabled(False)
+            analog_layout.addWidget(enable_cb, i, 0)
+            analog_layout.addWidget(mode_cb, i, 1)
+            self.analog_widgets.append((enable_cb, mode_cb))
+
+            enable_cb.stateChanged.connect(self.update_config)
+            if(i<4):
+                mode_cb.currentIndexChanged.connect(self.update_config) #dropdowns for AI4-7 cannot be changed
+
+        analog_group.setLayout(analog_layout)
+        layout.addWidget(analog_group)
+
+        # Digital IO Group
+        digital_group = QGroupBox("Digital IO (DIO0 - DIO7)")
+        digital_layout = QGridLayout()
+        self.digital_widgets = []
+        for i in range(8):
+            enable_cb = QCheckBox(f"DIO{i}")
+            mode_cb = QComboBox()
+            mode_cb.addItems(['Input', 'Output'])
+            digital_layout.addWidget(enable_cb, i, 0)
+            digital_layout.addWidget(mode_cb, i, 1)
+            self.digital_widgets.append((enable_cb, mode_cb))
+
+            enable_cb.stateChanged.connect(self.update_config)
+            mode_cb.currentIndexChanged.connect(self.update_config)
+
+        digital_group.setLayout(digital_layout)
+        layout.addWidget(digital_group)
+
+        # Save / Load Buttons
+        button_layout = QHBoxLayout()
+        save_button = QPushButton("Save Config")
+        load_button = QPushButton("Load Config")
+        save_button.clicked.connect(self.save_config)
+        load_button.clicked.connect(self.load_config)
+        button_layout.addWidget(save_button)
+        button_layout.addWidget(load_button)
+        layout.addLayout(button_layout)
+
+        self.setLayout(layout)
+
+    def update_config(self):
+        # Read analog configurations
+        for i, (enable_cb, mode_cb) in enumerate(self.analog_widgets):
+            self.config_data['analog'][i]['enabled'] = enable_cb.isChecked()
+            self.config_data['analog'][i]['mode'] = mode_cb.currentText()
+
+        # Handle AI(n+4) disable logic
+        for i in range(4):
+            if self.analog_widgets[i][1].currentText() == 'Reference':
+                self.analog_widgets[i+4][0].setChecked(False)
+                self.analog_widgets[i+4][0].setEnabled(False)
+            else:
+                self.analog_widgets[i+4][0].setEnabled(True)
+
+        # Read digital configurations
+        for i, (enable_cb, mode_cb) in enumerate(self.digital_widgets):
+            self.config_data['digital'][i]['enabled'] = enable_cb.isChecked()
+            self.config_data['digital'][i]['mode'] = mode_cb.currentText()
+
+        self.config_changed.emit(self.config_data)
+
+    def save_config(self):
+        options = QFileDialog.Options()
+        filename, _ = QFileDialog.getSaveFileName(self, "Save Config As", "", "JSON Files (*.json)", options=options)
+        if filename:
+            try:
+                with open(filename, 'w') as f:
+                    json.dump(self.config_data, f, indent=4)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to save config: {e}")
+
+    def load_config(self):
+        options = QFileDialog.Options()
+        filename, _ = QFileDialog.getOpenFileName(self, "Load Config", "", "JSON Files (*.json)", options=options)
+        if filename:
+            try:
+                with open(filename, 'r') as f:
+                    self.config_data = json.load(f)
+                self.apply_config_to_ui()
+                self.config_changed.emit(self.config_data)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to load config: {e}")
+
+    def apply_config_to_ui(self):
+        self.blockSignals(True)
+        for i, (enable_cb, mode_cb) in enumerate(self.analog_widgets):
+            enable_cb.setChecked(self.config_data['analog'][i]['enabled'])
+            mode_cb.setCurrentText(self.config_data['analog'][i]['mode'])
+
+        for i, (enable_cb, mode_cb) in enumerate(self.digital_widgets):
+            enable_cb.setChecked(self.config_data['digital'][i]['enabled'])
+            mode_cb.setCurrentText(self.config_data['digital'][i]['mode'])
+        self.blockSignals(False)
+        self.update_config()
+
+# === Plots Tab with PyQtGraph ===
+class PlotsTab(QWidget):
+    def __init__(self, data_queue):
+        super().__init__()
+        self.data_queue = data_queue
+
+        self.max_points = 500
+        self.x_data = []
+        self.y_data_ch1 = []
+        self.y_data_ch2 = []
+
+        layout = QVBoxLayout()
+        self.plot_widget = pg.PlotWidget(title="Live DAQ Data")
+        self.plot_widget.setLabel('left', 'Voltage', units='V')
+        self.plot_widget.setLabel('bottom', 'Time', units='s')
+
+        self.curve_ch1 = self.plot_widget.plot(pen='r', name="Channel 1")
+        self.curve_ch2 = self.plot_widget.plot(pen='b', name="Channel 2")
+
+        layout.addWidget(self.plot_widget)
+        self.setLayout(layout)
+
+        self.plot_timer = QTimer()
+        self.plot_timer.timeout.connect(self.update_plot)
+        self.plot_timer.start(100)  # 10 Hz updates
+
+    def update_plot(self):
+        while not self.data_queue.empty():
+            sample = self.data_queue.get()
+            self.x_data.append(sample['timestamp'])
+            self.y_data_ch1.append(sample['channel_1'])
+            self.y_data_ch2.append(sample['channel_2'])
+
+        if len(self.x_data) > self.max_points:
+            self.x_data = self.x_data[-self.max_points:]
+            self.y_data_ch1 = self.y_data_ch1[-self.max_points:]
+            self.y_data_ch2 = self.y_data_ch2[-self.max_points:]
+
+        if self.x_data:
+            t0 = self.x_data[0]
+            x_shifted = [t - t0 for t in self.x_data]
+            self.curve_ch1.setData(x_shifted, self.y_data_ch1)
+            self.curve_ch2.setData(x_shifted, self.y_data_ch2)
+
+# === Recording Tab with Controls ===
+class RecordingTab(QWidget):
+    start_recording_signal = pyqtSignal(str)
+    stop_recording_signal = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        self.status_label = QLabel("Not Recording")
+        self.start_button = QPushButton("Start Recording")
+        self.stop_button = QPushButton("Stop Recording")
+        self.stop_button.setEnabled(False)
+
+        self.start_button.clicked.connect(self.start_recording)
+        self.stop_button.clicked.connect(self.stop_recording)
+
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.start_button)
+        layout.addWidget(self.stop_button)
+        self.setLayout(layout)
+
+    def start_recording(self):
+        options = QFileDialog.Options()
+        filename, _ = QFileDialog.getSaveFileName(self, "Save Recording As", "", "CSV Files (*.csv)", options=options)
+        if filename:
+            self.status_label.setText(f"Recording to: {filename}")
+            self.start_button.setEnabled(False)
+            self.stop_button.setEnabled(True)
+            self.start_recording_signal.emit(filename)
+
+    def stop_recording(self):
+        self.status_label.setText("Not Recording")
+        self.start_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+        self.stop_recording_signal.emit()
+
+# === Main Application ===
+class MainWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("NI DAQ Control System")
+        self.resize(800, 600)
+
+        self.plot_queue = queue.Queue(maxsize=1000)
+        self.record_queue = queue.Queue(maxsize=1000)
+        self.recording_flag = threading.Event()
+
+        # DAQ Thread
+        self.daq_worker = DAQWorker(self.plot_queue, self.record_queue, self.recording_flag, sample_rate_hz=50)
+        self.daq_worker.start()
+
+        # Recording Thread
+        self.recording_worker = RecordingWorker(self.record_queue, self.recording_flag)
+
+        # Layout and Tabs
+        main_layout = QVBoxLayout()
+        tabs = QTabWidget()
+        tabs.addTab(ConfigTab(), "Configuration")
+        self.plots_tab = PlotsTab(self.plot_queue)
+        tabs.addTab(self.plots_tab, "Plots")
+        self.recording_tab = RecordingTab()
+        tabs.addTab(self.recording_tab, "Recording")
+        main_layout.addWidget(tabs)
+
+        # Status & Stop DAQ Button
+        self.status_label = QLabel("DAQ Running...")
+        stop_daq_button = QPushButton("Stop DAQ")
+        stop_daq_button.clicked.connect(self.stop_daq)
+        main_layout.addWidget(self.status_label)
+        main_layout.addWidget(stop_daq_button)
+
+        self.setLayout(main_layout)
+
+        # Connect Recording Signals
+        self.recording_tab.start_recording_signal.connect(self.start_recording)
+        self.recording_tab.stop_recording_signal.connect(self.stop_recording)
+
+    @pyqtSlot(str)
+    def start_recording(self, filename):
+        self.recording_worker.start_recording(filename)
+
+    @pyqtSlot()
+    def stop_recording(self):
+        self.recording_worker.stop_recording()
+
+    def stop_daq(self):
+        self.daq_worker.stop()
+        self.status_label.setText("DAQ Stopped")
+
+# === Run App ===
+app = QApplication(sys.argv)
+window = MainWindow()
+window.show()
+sys.exit(app.exec_())
