@@ -1,8 +1,24 @@
 {
     "analog": [
         {
+            "enabled": true,
+            "mode": "Reference"
+        },
+        {
             "enabled": false,
             "mode": "Reference"
+        },
+        {
+            "enabled": false,
+            "mode": "Reference"
+        },
+        {
+            "enabled": false,
+            "mode": "Ground"
+        },
+        {
+            "enabled": false,
+            "mode": "Ground"
         },
         {
             "enabled": false,
@@ -14,22 +30,6 @@
         },
         {
             "enabled": true,
-            "mode": "Reference"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": false,
             "mode": "Ground"
         }
     ],
@@ -48,10 +48,10 @@
         },
         {
             "enabled": false,
-            "mode": "Input"
+            "mode": "Output"
         },
         {
-            "enabled": false,
+            "enabled": true,
             "mode": "Input"
         },
         {

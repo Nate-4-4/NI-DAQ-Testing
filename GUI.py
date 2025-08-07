@@ -11,11 +11,12 @@ import json
 
 # === DAQ Worker Thread (Dummy Data Generator) ===
 class DAQWorker(QThread):
-    def __init__(self, plot_queue, record_queue, record_flag, sample_rate_hz=100):
+    def __init__(self, plot_queue, record_queue, record_flag, config_data, sample_rate_hz=100):
         super().__init__()
         self.plot_queue = plot_queue
         self.record_queue = record_queue
         self.record_flag = record_flag
+        self.config_data = config_data
         self.sample_interval = 1.0 / sample_rate_hz
         self.running = False
 
@@ -23,10 +24,31 @@ class DAQWorker(QThread):
         self.running = True
         while self.running:
             timestamp = time.time()
+            # Fake data for now
+            dummy_analog_data = {
+                'timestamp': timestamp,
+                'channel_1': random.uniform(0, 5),
+                'channel_2': random.uniform(0, 5),
+                'channel_3': random.uniform(0, 5),
+                'channel_4': random.uniform(0, 5),
+                'channel_5': random.uniform(0, 5),
+                'channel_6': random.uniform(0, 5),
+                'channel_7': random.uniform(0, 5),
+            }
+            dummy_digital_data = {
+                'timestamp': timestamp,
+                'channel_1': random.uniform(0, 1)>0.5,
+                'channel_2': random.uniform(0, 1)>0.5,
+                'channel_3': random.uniform(0, 1)>0.5,
+                'channel_4': random.uniform(0, 1)>0.5,
+                'channel_5': random.uniform(0, 1)>0.5,
+                'channel_6': random.uniform(0, 1)>0.5,
+                'channel_7': random.uniform(0, 1)>0.5,
+            }
             dummy_data = {
                 'timestamp': timestamp,
                 'channel_1': random.uniform(0, 5),
-                'channel_2': random.uniform(0, 5)
+                'channel_2': random.uniform(0, 5),
             }
             try:
                 self.plot_queue.put_nowait(dummy_data)
@@ -89,13 +111,10 @@ class RecordingWorker(QThread):
 class ConfigTab(QWidget):
     config_changed = pyqtSignal(dict)
 
-    def __init__(self):
+    def __init__(self, config_data):
         super().__init__()
 
-        self.config_data = {
-            'analog': [{'enabled': False, 'mode': 'Ground'} for _ in range(8)],
-            'digital': [{'enabled': False, 'mode': 'Input'} for _ in range(8)]
-        }
+        self.config_data = config_data
 
         layout = QVBoxLayout()
 
@@ -141,6 +160,7 @@ class ConfigTab(QWidget):
         layout.addWidget(digital_group)
 
         # Save / Load Buttons
+        self.loading_flag = False
         button_layout = QHBoxLayout()
         save_button = QPushButton("Save Config")
         load_button = QPushButton("Load Config")
@@ -153,6 +173,8 @@ class ConfigTab(QWidget):
         self.setLayout(layout)
 
     def update_config(self):
+        if(self.loading_flag): 
+            return
         # Read analog configurations
         for i, (enable_cb, mode_cb) in enumerate(self.analog_widgets):
             self.config_data['analog'][i]['enabled'] = enable_cb.isChecked()
@@ -196,7 +218,7 @@ class ConfigTab(QWidget):
                 QMessageBox.critical(self, "Error", f"Failed to load config: {e}")
 
     def apply_config_to_ui(self):
-        self.blockSignals(True)
+        self.loading_flag = True
         for i, (enable_cb, mode_cb) in enumerate(self.analog_widgets):
             enable_cb.setChecked(self.config_data['analog'][i]['enabled'])
             mode_cb.setCurrentText(self.config_data['analog'][i]['mode'])
@@ -204,7 +226,7 @@ class ConfigTab(QWidget):
         for i, (enable_cb, mode_cb) in enumerate(self.digital_widgets):
             enable_cb.setChecked(self.config_data['digital'][i]['enabled'])
             mode_cb.setCurrentText(self.config_data['digital'][i]['mode'])
-        self.blockSignals(False)
+        self.loading_flag = False
         self.update_config()
 
 # === Plots Tab with PyQtGraph ===
@@ -294,12 +316,17 @@ class MainWindow(QWidget):
         self.setWindowTitle("NI DAQ Control System")
         self.resize(800, 600)
 
+        #shared data
         self.plot_queue = queue.Queue(maxsize=1000)
         self.record_queue = queue.Queue(maxsize=1000)
         self.recording_flag = threading.Event()
+        self.config_data = {
+            'analog': [{'enabled': False, 'mode': 'Ground'} for _ in range(8)],
+            'digital': [{'enabled': False, 'mode': 'Input'} for _ in range(8)]
+        }
 
         # DAQ Thread
-        self.daq_worker = DAQWorker(self.plot_queue, self.record_queue, self.recording_flag, sample_rate_hz=50)
+        self.daq_worker = DAQWorker(self.plot_queue, self.record_queue, self.recording_flag, self.config_data, sample_rate_hz=50)
         self.daq_worker.start()
 
         # Recording Thread
@@ -308,7 +335,7 @@ class MainWindow(QWidget):
         # Layout and Tabs
         main_layout = QVBoxLayout()
         tabs = QTabWidget()
-        tabs.addTab(ConfigTab(), "Configuration")
+        tabs.addTab(ConfigTab(self.config_data), "Configuration")
         self.plots_tab = PlotsTab(self.plot_queue)
         tabs.addTab(self.plots_tab, "Plots")
         self.recording_tab = RecordingTab()
