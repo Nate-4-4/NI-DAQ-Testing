@@ -65,6 +65,9 @@ class DAQWorker(QThread):
         self.running = False
         self.wait()
 
+    def update_config(self, config):
+        self.config_data = config
+
 # === Recording Worker Thread ===
 class RecordingWorker(QThread):
     def __init__(self, data_queue, active_flag):
@@ -213,7 +216,6 @@ class ConfigTab(QWidget):
                 with open(filename, 'r') as f:
                     self.config_data = json.load(f)
                 self.apply_config_to_ui()
-                self.config_changed.emit(self.config_data)
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load config: {e}")
 
@@ -237,41 +239,71 @@ class PlotsTab(QWidget):
 
         self.max_points = 500
         self.x_data = []
-        self.y_data_ch1 = []
-        self.y_data_ch2 = []
+        self.y_data = {}  # dict: channel_name -> list of y-values
+        self.curves = {}  # dict: channel_name -> pyqtgraph curve
 
         layout = QVBoxLayout()
         self.plot_widget = pg.PlotWidget(title="Live DAQ Data")
         self.plot_widget.setLabel('left', 'Voltage', units='V')
         self.plot_widget.setLabel('bottom', 'Time', units='s')
 
-        self.curve_ch1 = self.plot_widget.plot(pen='r', name="Channel 1")
-        self.curve_ch2 = self.plot_widget.plot(pen='b', name="Channel 2")
-
         layout.addWidget(self.plot_widget)
         self.setLayout(layout)
+
+        self.active_channels = []  # list of active analog channel names (e.g. "AI0", "AI1")
 
         self.plot_timer = QTimer()
         self.plot_timer.timeout.connect(self.update_plot)
         self.plot_timer.start(100)  # 10 Hz updates
 
     def update_plot(self):
+        updated = False
         while not self.data_queue.empty():
             sample = self.data_queue.get()
             self.x_data.append(sample['timestamp'])
-            self.y_data_ch1.append(sample['channel_1'])
-            self.y_data_ch2.append(sample['channel_2'])
 
-        if len(self.x_data) > self.max_points:
-            self.x_data = self.x_data[-self.max_points:]
-            self.y_data_ch1 = self.y_data_ch1[-self.max_points:]
-            self.y_data_ch2 = self.y_data_ch2[-self.max_points:]
+            for ch in self.active_channels:
+                if ch in sample:
+                    self.y_data[ch].append(sample[ch])
+            updated = True
 
-        if self.x_data:
-            t0 = self.x_data[0]
-            x_shifted = [t - t0 for t in self.x_data]
-            self.curve_ch1.setData(x_shifted, self.y_data_ch1)
-            self.curve_ch2.setData(x_shifted, self.y_data_ch2)
+        if updated:
+            # Trim to max_points
+            if len(self.x_data) > self.max_points:
+                self.x_data = self.x_data[-self.max_points:]
+                for ch in self.active_channels:
+                    self.y_data[ch] = self.y_data[ch][-self.max_points:]
+
+            if self.x_data:
+                t0 = self.x_data[0]
+                x_shifted = [t - t0 for t in self.x_data]
+                for ch in self.active_channels:
+                    self.curves[ch].setData(x_shifted, self.y_data[ch])
+
+    def update_config(self, config):
+        """
+        config is expected to be a dict with an 'analog_inputs' section like:
+        {
+            'AI0': {'enabled': True, 'mode': 'Ground'},
+            'AI1': {'enabled': False, 'mode': 'Reference'},
+            ...
+        }
+        """
+        # Remove curves for channels that are no longer active
+        for ch in list(self.active_channels):
+            if not config.get('analog_inputs', {}).get(ch, {}).get('enabled', False):
+                self.plot_widget.removeItem(self.curves[ch])
+                del self.curves[ch]
+                del self.y_data[ch]
+                self.active_channels.remove(ch)
+
+        # Add curves for new active channels
+        for ch, settings in config.get('analog_inputs', {}).items():
+            if settings.get('enabled', False) and ch not in self.active_channels:
+                pen_color = pg.intColor(len(self.curves))  # Auto-generate a distinct color
+                self.curves[ch] = self.plot_widget.plot(pen=pen_color, name=ch)
+                self.y_data[ch] = []
+                self.active_channels.append(ch)
 
 # === Recording Tab with Controls ===
 class RecordingTab(QWidget):
@@ -335,7 +367,8 @@ class MainWindow(QWidget):
         # Layout and Tabs
         main_layout = QVBoxLayout()
         tabs = QTabWidget()
-        tabs.addTab(ConfigTab(self.config_data), "Configuration")
+        self.config_tab = ConfigTab(self.config_data)
+        tabs.addTab(self.config_tab, "Configuration")
         self.plots_tab = PlotsTab(self.plot_queue)
         tabs.addTab(self.plots_tab, "Plots")
         self.recording_tab = RecordingTab()
@@ -355,6 +388,9 @@ class MainWindow(QWidget):
         self.recording_tab.start_recording_signal.connect(self.start_recording)
         self.recording_tab.stop_recording_signal.connect(self.stop_recording)
 
+        # Connect Configuration Signals
+        self.config_tab.config_changed.connect(self.handle_config_update)
+
     @pyqtSlot(str)
     def start_recording(self, filename):
         self.recording_worker.start_recording(filename)
@@ -366,6 +402,13 @@ class MainWindow(QWidget):
     def stop_daq(self):
         self.daq_worker.stop()
         self.status_label.setText("DAQ Stopped")
+
+    @pyqtSlot(dict)
+    def handle_config_update(self, config):
+        self.daq_worker.update_config(config)
+        self.plots_tab.update_config(config)
+        self.recording_worker.stop_recording()
+        print("update")
 
 # === Run App ===
 app = QApplication(sys.argv)
