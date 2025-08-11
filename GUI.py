@@ -8,57 +8,58 @@ from PyQt5.QtCore import QThread, QTimer, pyqtSignal, pyqtSlot
 import pyqtgraph as pg
 import threading
 import json
+import math
 
 # === DAQ Worker Thread (Dummy Data Generator) ===
 class DAQWorker(QThread):
-    def __init__(self, plot_queue, record_queue, record_flag, config_data, sample_rate_hz=100):
+    def __init__(self, plot_queue, record_queue, record_flag, sample_rate_hz=100):
         super().__init__()
         self.plot_queue = plot_queue
         self.record_queue = record_queue
         self.record_flag = record_flag
-        self.config_data = config_data
         self.sample_interval = 1.0 / sample_rate_hz
+        self.active_channels = []
         self.running = False
+        self.start_time = 0
 
     def run(self):
         self.running = True
+        self.start_time = time.time()
         while self.running:
-            timestamp = time.time()
+            timestamp = time.time() - self.start_time
             # Fake data for now
-            dummy_analog_data = {
-                'timestamp': timestamp,
-                'channel_1': random.uniform(0, 5),
-                'channel_2': random.uniform(0, 5),
-                'channel_3': random.uniform(0, 5),
-                'channel_4': random.uniform(0, 5),
-                'channel_5': random.uniform(0, 5),
-                'channel_6': random.uniform(0, 5),
-                'channel_7': random.uniform(0, 5),
-            }
-            dummy_digital_data = {
-                'timestamp': timestamp,
-                'channel_1': random.uniform(0, 1)>0.5,
-                'channel_2': random.uniform(0, 1)>0.5,
-                'channel_3': random.uniform(0, 1)>0.5,
-                'channel_4': random.uniform(0, 1)>0.5,
-                'channel_5': random.uniform(0, 1)>0.5,
-                'channel_6': random.uniform(0, 1)>0.5,
-                'channel_7': random.uniform(0, 1)>0.5,
-            }
             dummy_data = {
-                'timestamp': timestamp,
                 'AI0': random.uniform(0, 5),
                 'AI1': random.uniform(0, 5),
+                'AI2': random.uniform(0, 5),
+                'AI3': random.uniform(0, 5),
+                'AI4': random.uniform(0, 5),
+                'AI5': random.uniform(0, 5),
+                'AI6': random.uniform(0, 5),
+                'AI7': random.uniform(0, 5),
+                'DI0': math.floor(random.uniform(0, 1) + 0.5),
+                'DI1': math.floor(random.uniform(0, 1) + 0.5),
+                'DI2': math.floor(random.uniform(0, 1) + 0.5),
+                'DI3': math.floor(random.uniform(0, 1) + 0.5),
+                'DI4': math.floor(random.uniform(0, 1) + 0.5),
+                'DI5': math.floor(random.uniform(0, 1) + 0.5),
+                'DI6': math.floor(random.uniform(0, 1) + 0.5),
+                'DI7': math.floor(random.uniform(0, 1) + 0.5),
             }
+            data = {
+                'timestamp': timestamp,
+            }
+            for channel in list(self.active_channels):
+                data[channel] = dummy_data[channel]
             try:
-                self.plot_queue.put_nowait(dummy_data)
+                self.plot_queue.put_nowait(data)
             except queue.Full:
-                print("Warning: Plot queue full, dropping sample.")
+                pass
             if(self.record_flag.is_set()):
                 try:
-                    self.record_queue.put_nowait(dummy_data)
+                    self.record_queue.put_nowait(data)
                 except queue.Full:
-                    print("Warning: Recording queue full, dropping sample.")
+                    pass
             time.sleep(self.sample_interval)
 
     def stop(self):
@@ -66,25 +67,35 @@ class DAQWorker(QThread):
         self.wait()
 
     def update_config(self, config):
-        self.config_data = config
+        self.active_channels = []
+        for i in range(8):
+            if(config['analog'][i]['enabled']):
+                self.active_channels.append(f"AI{i}")
+        for i in range(8):
+            if(config['digital'][i]['enabled'] and config['digital'][i]['mode'] == 'Input'):
+                self.active_channels.append(f"DI{i}")
+                
 
 # === Recording Worker Thread ===
 class RecordingWorker(QThread):
-    def __init__(self, data_queue, active_flag):
+    def __init__(self, parent, data_queue, active_flag):
         super().__init__()
+        self.parentTab = parent
         self.data_queue = data_queue
         self.active_flag = active_flag
         self.running = False
         self.file = None
         self.writer = None
+        self.active_channels = []
 
     def start_recording(self, filename):
         try:
             self.file = open(filename, 'w', newline='')
         except (OSError, IOError) as e:
-            print(f"Error opening file: {e}")
+            QMessageBox.critical(self.parentTab, "Error", f"Error opening file: {e}")
             return
-        self.writer = csv.DictWriter(self.file, fieldnames=['timestamp', 'channel_1', 'channel_2'])
+        data_fields = ['timestamp'] + self.active_channels
+        self.writer = csv.DictWriter(self.file, fieldnames=data_fields)
         self.writer.writeheader()
         self.running = True
         self.active_flag.set()
@@ -97,7 +108,7 @@ class RecordingWorker(QThread):
                 try:
                     self.writer.writerow(sample)
                 except (OSError, IOError, ValueError) as e:
-                    print(f"Error writing to CSV file: {e}")
+                    QMessageBox.critical(self.parentTab, "Error", f"Error writing to CSV file: {e}")
                     self.stop_recording()
                     return
             time.sleep(0.01)  # Prevent CPU hogging
@@ -109,6 +120,17 @@ class RecordingWorker(QThread):
         if self.file:
             self.file.close()
             self.file = None
+
+    def update_config(self, config):
+        self.stop_recording()
+        #update active channels
+        self.active_channels = []
+        for i in range(8):
+            if(config['analog'][i]['enabled']):
+                self.active_channels.append(f"AI{i}")
+        for i in range(8):
+            if(config['digital'][i]['enabled'] and config['digital'][i]['mode'] == 'Input'):
+                self.active_channels.append(f"DI{i}")
 
 # === Config Tab (Placeholder) ===
 class ConfigTab(QWidget):
@@ -282,21 +304,6 @@ class PlotsTab(QWidget):
                     self.curves[ch_idx].setData(x_shifted, self.y_data[ch_idx])
 
     def update_config(self, config):
-        """
-        config format:
-        {
-            "analog": [
-                {"enabled": True, "mode": "Ground"},
-                {"enabled": False, "mode": "Ground"},
-                ...
-            ],
-            "digital": [
-                {"enabled": False, "mode": "Input"},
-                ...
-            ]
-        }
-        """
-
         # Remove curves for channels that are no longer active
         for ch_idx in list(self.active_channels):
             if not config['analog'][ch_idx]['enabled']:
@@ -371,11 +378,8 @@ class MainWindow(QWidget):
         }
 
         # DAQ Thread
-        self.daq_worker = DAQWorker(self.plot_queue, self.record_queue, self.recording_flag, self.config_data, sample_rate_hz=50)
+        self.daq_worker = DAQWorker(self.plot_queue, self.record_queue, self.recording_flag, sample_rate_hz=50)
         self.daq_worker.start()
-
-        # Recording Thread
-        self.recording_worker = RecordingWorker(self.record_queue, self.recording_flag)
 
         # Layout and Tabs
         main_layout = QVBoxLayout()
@@ -387,6 +391,9 @@ class MainWindow(QWidget):
         self.recording_tab = RecordingTab()
         tabs.addTab(self.recording_tab, "Recording")
         main_layout.addWidget(tabs)
+
+        # Recording Thread
+        self.recording_worker = RecordingWorker(self.recording_tab, self.record_queue, self.recording_flag)
 
         # Status & Stop DAQ Button
         self.status_label = QLabel("DAQ Running...")
@@ -420,8 +427,7 @@ class MainWindow(QWidget):
     def handle_config_update(self, config):
         self.daq_worker.update_config(config)
         self.plots_tab.update_config(config)
-        self.recording_worker.stop_recording()
-        print("update")
+        self.recording_worker.update_config(config)
 
 # === Run App ===
 app = QApplication(sys.argv)
