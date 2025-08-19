@@ -1,3 +1,4 @@
+'''
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -32,8 +33,9 @@ ax.legend(loc='upper right')
 
 plt.tight_layout()
 plt.show()
-
 '''
+
+
 import sys
 import numpy as np
 from PyQt5.QtWidgets import QApplication
@@ -84,4 +86,3 @@ if __name__ == '__main__':
     win = DigitalTimingPlot()
     win.show()
     sys.exit(app.exec_())
-'''

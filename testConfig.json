@@ -1,27 +1,11 @@
 {
     "analog": [
         {
+            "enabled": false,
+            "mode": "Ground"
+        },
+        {
             "enabled": true,
-            "mode": "Reference"
-        },
-        {
-            "enabled": false,
-            "mode": "Reference"
-        },
-        {
-            "enabled": false,
-            "mode": "Reference"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": false,
             "mode": "Ground"
         },
         {
@@ -30,33 +14,37 @@
         },
         {
             "enabled": true,
+            "mode": "Reference"
+        },
+        {
+            "enabled": false,
+            "mode": "Ground"
+        },
+        {
+            "enabled": false,
+            "mode": "Ground"
+        },
+        {
+            "enabled": false,
+            "mode": "Ground"
+        },
+        {
+            "enabled": false,
             "mode": "Ground"
         }
     ],
     "digital": [
         {
-            "enabled": false,
+            "enabled": true,
             "mode": "Input"
-        },
-        {
-            "enabled": false,
-            "mode": "Input"
-        },
-        {
-            "enabled": false,
-            "mode": "Input"
-        },
-        {
-            "enabled": false,
-            "mode": "Output"
         },
         {
             "enabled": true,
             "mode": "Input"
         },
         {
-            "enabled": false,
-            "mode": "Input"
+            "enabled": true,
+            "mode": "Output"
         },
         {
             "enabled": false,
@@ -64,6 +52,18 @@
         },
         {
             "enabled": false,
+            "mode": "Input"
+        },
+        {
+            "enabled": true,
+            "mode": "Input"
+        },
+        {
+            "enabled": true,
+            "mode": "Output"
+        },
+        {
+            "enabled": true,
             "mode": "Input"
         }
     ]

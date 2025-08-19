@@ -37,14 +37,14 @@ class DAQWorker(QThread):
                 'AI5': random.uniform(0, 5),
                 'AI6': random.uniform(0, 5),
                 'AI7': random.uniform(0, 5),
-                'DI0': math.floor(random.uniform(0, 1) + 0.5),
-                'DI1': math.floor(random.uniform(0, 1) + 0.5),
-                'DI2': math.floor(random.uniform(0, 1) + 0.5),
-                'DI3': math.floor(random.uniform(0, 1) + 0.5),
-                'DI4': math.floor(random.uniform(0, 1) + 0.5),
-                'DI5': math.floor(random.uniform(0, 1) + 0.5),
-                'DI6': math.floor(random.uniform(0, 1) + 0.5),
-                'DI7': math.floor(random.uniform(0, 1) + 0.5),
+                'DIO0': math.floor(random.uniform(0, 1) + 0.5),
+                'DIO1': math.floor(random.uniform(0, 1) + 0.5),
+                'DIO2': math.floor(random.uniform(0, 1) + 0.5),
+                'DIO3': math.floor(random.uniform(0, 1) + 0.5),
+                'DIO4': math.floor(random.uniform(0, 1) + 0.5),
+                'DIO5': math.floor(random.uniform(0, 1) + 0.5),
+                'DIO6': math.floor(random.uniform(0, 1) + 0.5),
+                'DIO7': math.floor(random.uniform(0, 1) + 0.5),
             }
             data = {
                 'timestamp': timestamp,
@@ -73,7 +73,7 @@ class DAQWorker(QThread):
                 self.active_channels.append(f"AI{i}")
         for i in range(8):
             if(config['digital'][i]['enabled'] and config['digital'][i]['mode'] == 'Input'):
-                self.active_channels.append(f"DI{i}")
+                self.active_channels.append(f"DIO{i}")
                 
 
 # === Recording Worker Thread ===
@@ -261,21 +261,28 @@ class PlotsTab(QWidget):
 
         self.max_points = 500
         self.x_data = []
-        self.y_data = {}  # channel index -> list of samples
-        self.curves = {}  # channel index -> pg.PlotDataItem
+        self.y_data = {}  # analog channel index -> list of samples
+        self.bool_data = {} # digital channel index -> list of samples
+        self.curves = {}  # analog channel index -> pg.PlotDataItem
+        self.waveforms = {} # digital channel index -> pg.PlotDataItem
 
         layout = QVBoxLayout()
-        self.plot_widget = pg.PlotWidget(title="Live DAQ Data")
+        self.plot_widget = pg.PlotWidget(title="Live DAQ Analog Data")
         self.plot_widget.setLabel('left', 'Voltage', units='V')
         self.plot_widget.setLabel('bottom', 'Time', units='s')
+        self.digital_plot_widget = pg.PlotWidget(title="Live DAQ Digital Data")
+        self.digital_plot_widget.setLabel('left', 'Logic Value')
+        self.digital_plot_widget.setLabel('bottom', 'Time', units='s')
         layout.addWidget(self.plot_widget)
+        layout.addWidget(self.digital_plot_widget)
         self.setLayout(layout)
 
         self.active_channels = []  # list of analog channel indices
+        self.active_digital_channels = [] # list of digital channel indices
 
         self.plot_timer = QTimer()
         self.plot_timer.timeout.connect(self.update_plot)
-        self.plot_timer.start(100)  # update 10 Hz
+        self.plot_timer.start(20)  # update 20 Hz
 
     def update_plot(self):
         updated = False
@@ -289,22 +296,42 @@ class PlotsTab(QWidget):
                     self.y_data[ch_idx].append(sample[ch_name])
                 else:
                     self.y_data[ch_idx].append(0)
+
+            for i in range(0,len(self.active_digital_channels)):
+                ch_idx = self.active_digital_channels[i]
+                ch_name = f"DIO{ch_idx}"
+                if ch_name in sample:
+                    self.bool_data[ch_idx].append(self.binaryPlotValue(i, sample[ch_name]))
+                else:
+                    self.bool_data[ch_idx].append(self.binaryPlotValue(i, 0))
+
             updated = True
 
         if updated:
             if len(self.x_data) > self.max_points:
                 self.x_data = self.x_data[-self.max_points:]
+                #truncate analog curve data
                 for ch_idx in self.active_channels:
                     self.y_data[ch_idx] = self.y_data[ch_idx][-self.max_points:]
+                #truncate digital waveform data
+                for ch_idx in self.active_digital_channels:
+                    self.bool_data[ch_idx] = self.bool_data[ch_idx][-self.max_points:]
 
             if self.x_data:
                 t0 = self.x_data[0]
                 x_shifted = [t - t0 for t in self.x_data]
+                #update analog curves
                 for ch_idx in self.active_channels:
                     self.curves[ch_idx].setData(x_shifted, self.y_data[ch_idx])
+                #update digital waveforms
+                x_shifted.insert(0,x_shifted[0])
+                for ch_idx in self.active_digital_channels:
+                    self.waveforms[ch_idx].setData(x_shifted, self.bool_data[ch_idx])
+            
 
     def update_config(self, config):
-        # Remove curves for channels that are no longer active
+        # === ANALOG ===
+        # Remove curves for analog channels that are no longer active
         for ch_idx in list(self.active_channels):
             if not config['analog'][ch_idx]['enabled']:
                 self.plot_widget.removeItem(self.curves[ch_idx])
@@ -314,7 +341,7 @@ class PlotsTab(QWidget):
             else:
                 self.y_data[ch_idx] = []
 
-        # Add curves for newly active channels
+        # Add curves for newly active analog channels
         for ch_idx, settings in enumerate(config['analog']):
             if settings['enabled'] and ch_idx not in self.active_channels:
                 pen_color = pg.intColor(len(self.curves))
@@ -322,8 +349,46 @@ class PlotsTab(QWidget):
                 self.y_data[ch_idx] = []
                 self.active_channels.append(ch_idx)
 
+        # === DIGITAL ===
+        # Remove previous digital waveforms
+        for ch_idx in list(self.active_digital_channels):
+            self.digital_plot_widget.removeItem(self.waveforms[ch_idx])
+        self.waveforms = {}
+        self.bool_data = {}
+        self.active_digital_channels = []
+            
+        # Add curves for newly active digital channels
+        for ch_idx, settings in enumerate(config['digital']): 
+            if settings['enabled']:
+                pen_color = pg.intColor(len(self.waveforms))
+                self.waveforms[ch_idx] = self.digital_plot_widget.plot([0, 0], [0], pen=pen_color, stepMode=True, name=f"DIO{ch_idx}")
+                self.bool_data[ch_idx] = []
+                self.active_digital_channels.append(ch_idx)
+
+        # Update digital channel plot 
+        y_axis = self.digital_plot_widget.getAxis('left')
+        ticks = []
+        for i in range(0,len(self.active_digital_channels)):
+            if(config['digital'][self.active_digital_channels[i]]['mode'] == "Input"):
+                ticks.append((i+0.5, f"DI{self.active_digital_channels[i]}"))
+            else:
+                ticks.append((i+0.5, f"DO{self.active_digital_channels[i]}"))
+        y_axis.setTicks([ticks])
+        self.digital_plot_widget.setYRange(0, len(self.active_digital_channels))
+
+        # === GENERAL ===
         #reset timestamps
         self.x_data = []
+    
+    def binaryPlotValue(self, index, truthValue):
+        position = index + 0.5
+        if(truthValue):
+            position = position + 1/3.0
+        else:
+            position = position - 1/3.0
+        return position
+        
+        
 
 # === Recording Tab with Controls ===
 class RecordingTab(QWidget):
@@ -399,8 +464,11 @@ class MainWindow(QWidget):
         self.status_label = QLabel("DAQ Running...")
         stop_daq_button = QPushButton("Stop DAQ")
         stop_daq_button.clicked.connect(self.stop_daq)
+        start_daq_button = QPushButton("Start DAQ")
+        start_daq_button.clicked.connect(self.start_daq)
         main_layout.addWidget(self.status_label)
         main_layout.addWidget(stop_daq_button)
+        main_layout.addWidget(start_daq_button)
 
         self.setLayout(main_layout)
 
@@ -410,6 +478,9 @@ class MainWindow(QWidget):
 
         # Connect Configuration Signals
         self.config_tab.config_changed.connect(self.handle_config_update)
+
+        #stop DAQ
+        self.stop_daq()
 
     @pyqtSlot(str)
     def start_recording(self, filename):
@@ -421,7 +492,13 @@ class MainWindow(QWidget):
 
     def stop_daq(self):
         self.daq_worker.stop()
+        self.recording_worker.stop_recording()
         self.status_label.setText("DAQ Stopped")
+
+    def start_daq(self):
+        self.daq_worker.start()
+        self.plots_tab.update_config(self.config_data)
+        self.status_label.setText("DAQ Running...")
 
     @pyqtSlot(dict)
     def handle_config_update(self, config):
