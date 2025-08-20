@@ -446,8 +446,11 @@ class MainWindow(QWidget):
         self.daq_worker = DAQWorker(self.plot_queue, self.record_queue, self.recording_flag, sample_rate_hz=50)
         self.daq_worker.start()
 
-        # Layout and Tabs
+        # Layout
         main_layout = QVBoxLayout()
+        self.upper_layout = QHBoxLayout()
+        
+        # Tabs
         tabs = QTabWidget()
         self.config_tab = ConfigTab(self.config_data)
         tabs.addTab(self.config_tab, "Configuration")
@@ -460,16 +463,35 @@ class MainWindow(QWidget):
         # Recording Thread
         self.recording_worker = RecordingWorker(self.recording_tab, self.record_queue, self.recording_flag)
 
-        # Status & Stop DAQ Button
+        # Control Section
+        self.running_group = QGroupBox("DAQ Control")
+        running_layout = QVBoxLayout()
         self.status_label = QLabel("DAQ Running...")
         stop_daq_button = QPushButton("Stop DAQ")
         stop_daq_button.clicked.connect(self.stop_daq)
         start_daq_button = QPushButton("Start DAQ")
         start_daq_button.clicked.connect(self.start_daq)
-        main_layout.addWidget(self.status_label)
-        main_layout.addWidget(stop_daq_button)
-        main_layout.addWidget(start_daq_button)
+        running_layout.addWidget(self.status_label)
+        running_layout.addWidget(stop_daq_button)
+        running_layout.addWidget(start_daq_button)
+        self.running_group.setLayout(running_layout)
 
+        #Recording Section
+        self.recording_group = QGroupBox("Recording")
+        recording_layout = QVBoxLayout()
+        recording_layout.addWidget(QLabel("Recording"))
+        self.recording_group.setLayout(recording_layout)
+        #Output Section
+        self.output_group = QGroupBox("DAQ Outputs")
+        output_layout = QVBoxLayout()
+        output_layout.addWidget(QLabel("Output"))
+        self.output_group.setLayout(output_layout)
+        '''
+        self.upper_layout.addWidget(self.running_group)
+        self.upper_layout.addWidget(self.recording_group)
+        '''
+        main_layout.addWidget(self.running_group)
+        main_layout.addWidget(self.output_group)
         self.setLayout(main_layout)
 
         # Connect Recording Signals
@@ -496,12 +518,13 @@ class MainWindow(QWidget):
         self.status_label.setText("DAQ Stopped")
 
     def start_daq(self):
+        self.handle_config_update(self.config_data)
         self.daq_worker.start()
-        self.plots_tab.update_config(self.config_data)
         self.status_label.setText("DAQ Running...")
 
     @pyqtSlot(dict)
     def handle_config_update(self, config):
+        self.config_data = config
         self.daq_worker.update_config(config)
         self.plots_tab.update_config(config)
         self.recording_worker.update_config(config)
