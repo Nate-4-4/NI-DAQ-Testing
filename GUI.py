@@ -12,6 +12,7 @@ import math
 
 # === DAQ Worker Thread (Dummy Data Generator) ===
 class DAQWorker(QThread):
+
     def __init__(self, plot_queue, record_queue, record_flag, sample_rate_hz=100):
         super().__init__()
         self.plot_queue = plot_queue
@@ -19,6 +20,8 @@ class DAQWorker(QThread):
         self.record_flag = record_flag
         self.sample_interval = 1.0 / sample_rate_hz
         self.active_channels = []
+        self.user_input_channels = []
+        self.user_inputs = [0 for _ in range(0,8)]
         self.running = False
         self.start_time = 0
 
@@ -51,6 +54,9 @@ class DAQWorker(QThread):
             }
             for channel in list(self.active_channels):
                 data[channel] = dummy_data[channel]
+            for i in range(0,8):
+                if(f"DIO{i}" in self.user_input_channels):
+                    data[f"DIO{i}"] = self.user_inputs[i]
             try:
                 self.plot_queue.put_nowait(data)
             except queue.Full:
@@ -74,13 +80,22 @@ class DAQWorker(QThread):
         for i in range(8):
             if(config['digital'][i]['enabled'] and config['digital'][i]['mode'] == 'Input'):
                 self.active_channels.append(f"DIO{i}")
+        self.user_inputs = {}
+        for i in range(8):
+            self.user_inputs[i] = 0
+            if(config['digital'][i]['enabled'] and config['digital'][i]['mode'] == 'Output'):
+                self.user_input_channels.append(f"DIO{i}")
+
+    def user_input(self, channel, value):
+        self.user_inputs[channel] = value
+
                 
 
 # === Recording Worker Thread ===
 class RecordingWorker(QThread):
-    def __init__(self, parent, data_queue, active_flag):
+    file_exception = pyqtSignal(str)
+    def __init__(self, data_queue, active_flag):
         super().__init__()
-        self.parentTab = parent
         self.data_queue = data_queue
         self.active_flag = active_flag
         self.running = False
@@ -92,7 +107,7 @@ class RecordingWorker(QThread):
         try:
             self.file = open(filename, 'w', newline='')
         except (OSError, IOError) as e:
-            QMessageBox.critical(self.parentTab, "Error", f"Error opening file: {e}")
+            self.file_exception.emit(f"Error opening file: {e}")
             return
         data_fields = ['timestamp'] + self.active_channels
         self.writer = csv.DictWriter(self.file, fieldnames=data_fields)
@@ -108,7 +123,7 @@ class RecordingWorker(QThread):
                 try:
                     self.writer.writerow(sample)
                 except (OSError, IOError, ValueError) as e:
-                    QMessageBox.critical(self.parentTab, "Error", f"Error writing to CSV file: {e}")
+                    self.file_exception.emit(f"Error writing to CSV file: {e}")
                     self.stop_recording()
                     return
             time.sleep(0.01)  # Prevent CPU hogging
@@ -129,8 +144,8 @@ class RecordingWorker(QThread):
             if(config['analog'][i]['enabled']):
                 self.active_channels.append(f"AI{i}")
         for i in range(8):
-            if(config['digital'][i]['enabled'] and config['digital'][i]['mode'] == 'Input'):
-                self.active_channels.append(f"DI{i}")
+            if(config['digital'][i]['enabled']):
+                self.active_channels.append(f"DIO{i}")
 
 # === Config Tab (Placeholder) ===
 class ConfigTab(QWidget):
@@ -142,6 +157,17 @@ class ConfigTab(QWidget):
         self.config_data = config_data
 
         layout = QVBoxLayout()
+
+        # Save / Load Buttons
+        self.loading_flag = False
+        button_layout = QHBoxLayout()
+        save_button = QPushButton("Save Config")
+        load_button = QPushButton("Load Config")
+        save_button.clicked.connect(self.save_config)
+        load_button.clicked.connect(self.load_config)
+        button_layout.addWidget(save_button)
+        button_layout.addWidget(load_button)
+        layout.addLayout(button_layout)
 
         # Analog Inputs Group
         analog_group = QGroupBox("Analog Inputs (AI0 - AI7)")
@@ -184,16 +210,7 @@ class ConfigTab(QWidget):
         digital_group.setLayout(digital_layout)
         layout.addWidget(digital_group)
 
-        # Save / Load Buttons
-        self.loading_flag = False
-        button_layout = QHBoxLayout()
-        save_button = QPushButton("Save Config")
-        load_button = QPushButton("Load Config")
-        save_button.clicked.connect(self.save_config)
-        load_button.clicked.connect(self.load_config)
-        button_layout.addWidget(save_button)
-        button_layout.addWidget(load_button)
-        layout.addLayout(button_layout)
+        
 
         self.setLayout(layout)
 
@@ -402,29 +419,101 @@ class RecordingTab(QWidget):
         self.start_button = QPushButton("Start Recording")
         self.stop_button = QPushButton("Stop Recording")
         self.stop_button.setEnabled(False)
+        self.filename = None
+        self.recording = False
 
         self.start_button.clicked.connect(self.start_recording)
         self.stop_button.clicked.connect(self.stop_recording)
 
-        layout.addWidget(self.status_label)
         layout.addWidget(self.start_button)
         layout.addWidget(self.stop_button)
+        layout.addWidget(self.status_label)
         self.setLayout(layout)
 
     def start_recording(self):
         options = QFileDialog.Options()
         filename, _ = QFileDialog.getSaveFileName(self, "Save Recording As", "", "CSV Files (*.csv)", options=options)
         if filename:
-            self.status_label.setText(f"Recording to: {filename}")
+            self.status_label.setText(f"Recording...")
             self.start_button.setEnabled(False)
             self.stop_button.setEnabled(True)
+            self.filename = filename
+            self.recording = True
             self.start_recording_signal.emit(filename)
 
     def stop_recording(self):
+        if(self.recording):
+            QMessageBox.information(self,"Info", f"Recording stoped and saved to: {self.filename}")
+        self.recording = False
         self.status_label.setText("Not Recording")
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.stop_recording_signal.emit()
+
+# === Start/Stop Tab ===
+class ControlTab(QWidget):
+    start_daq_signal = pyqtSignal()
+    stop_daq_signal = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        self.status_label = QLabel("DAQ Stoped")
+        self.start_button = QPushButton("Start DAQ")
+        self.stop_button = QPushButton("Stop DAQ")
+        self.stop_button.setEnabled(False)
+
+        self.start_button.clicked.connect(self.start_daq)
+        self.stop_button.clicked.connect(self.stop_daq)
+
+        layout.addWidget(self.start_button)
+        layout.addWidget(self.stop_button)
+        layout.addWidget(self.status_label)
+        self.setLayout(layout)
+
+    def start_daq(self):
+        self.status_label.setText("DAQ Running...")
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+        self.start_daq_signal.emit()
+
+    def stop_daq(self):
+        self.status_label.setText("DAQ Stoped")
+        self.start_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+        self.stop_daq_signal.emit()
+
+# === Start/Stop Tab ===
+class OutputTab(QWidget):
+    update_output_signal = pyqtSignal(int, int)
+
+    def __init__(self):
+        super().__init__()
+        layout = QGridLayout()
+        self.status_label = QLabel("DAQ Stoped")
+        self.buttons = [QPushButton(f"DO{i}") for i in range(0,8)]
+        for i in range(0,len(self.buttons)):
+           button = self.buttons[i]
+           button.setEnabled(False)
+           button.setCheckable(True)
+           button.clicked.connect(lambda checked, i = i: self.button_callback(i))
+           layout.addWidget(button, i % 4, i / 4)
+
+        self.setLayout(layout)
+
+    def button_callback(self, button):
+        if(self.buttons[button].isChecked()):
+            self.update_output_signal.emit(button, 1)
+        else:
+            self.update_output_signal.emit(button, 0)
+
+    def update_config(self, config):
+        for i in range(8):
+            self.buttons[i].setChecked(False)
+            if(config['digital'][i]['enabled'] and config['digital'][i]['mode'] == 'Output'):
+                self.buttons[i].setEnabled(True)
+            else:
+                self.buttons[i].setEnabled(False)
 
 # === Main Application ===
 class MainWindow(QWidget):
@@ -447,54 +536,59 @@ class MainWindow(QWidget):
         self.daq_worker.start()
 
         # Layout
+        layout = QHBoxLayout()
         main_layout = QVBoxLayout()
-        self.upper_layout = QHBoxLayout()
-        
+        upper_layout = QHBoxLayout()
+
+        # Control Section
+        self.running_group = QGroupBox("DAQ Control")
+        running_layout = QVBoxLayout()
+        self.control_tab = ControlTab()
+        self.control_tab.start_daq_signal.connect(self.start_daq)
+        self.control_tab.stop_daq_signal.connect(self.stop_daq)
+        running_layout.addWidget(self.control_tab)
+        self.running_group.setLayout(running_layout)
+
+        #Recording Section
+        self.recording_group = QGroupBox("Recording")
+        recording_layout = QVBoxLayout()
+        self.recording_tab = RecordingTab()
+        recording_layout.addWidget(self.recording_tab)
+        self.recording_group.setLayout(recording_layout)
+
+        #Output Section
+        self.output_group = QGroupBox("DAQ Outputs")
+        output_layout = QVBoxLayout()
+        self.output_tab = OutputTab()
+        self.output_tab.update_output_signal.connect(self.input_update)
+        output_layout.addWidget(self.output_tab)
+        self.output_group.setLayout(output_layout)
+
+        #Organize widgets
+        upper_layout.addWidget(self.running_group)
+        upper_layout.addWidget(self.recording_group)
+        main_layout.addLayout(upper_layout)
+        main_layout.addWidget(self.output_group)
+        main_layout.setStretch(0,0)
+        main_layout.setStretch(1,1)
+        layout.addLayout(main_layout)
+
         # Tabs
         tabs = QTabWidget()
         self.config_tab = ConfigTab(self.config_data)
         tabs.addTab(self.config_tab, "Configuration")
         self.plots_tab = PlotsTab(self.plot_queue)
         tabs.addTab(self.plots_tab, "Plots")
-        self.recording_tab = RecordingTab()
-        tabs.addTab(self.recording_tab, "Recording")
-        main_layout.addWidget(tabs)
+        layout.addWidget(tabs)
+
+        #Establish GUI
+        self.setLayout(layout)
 
         # Recording Thread
-        self.recording_worker = RecordingWorker(self.recording_tab, self.record_queue, self.recording_flag)
-
-        # Control Section
-        self.running_group = QGroupBox("DAQ Control")
-        running_layout = QVBoxLayout()
-        self.status_label = QLabel("DAQ Running...")
-        stop_daq_button = QPushButton("Stop DAQ")
-        stop_daq_button.clicked.connect(self.stop_daq)
-        start_daq_button = QPushButton("Start DAQ")
-        start_daq_button.clicked.connect(self.start_daq)
-        running_layout.addWidget(self.status_label)
-        running_layout.addWidget(stop_daq_button)
-        running_layout.addWidget(start_daq_button)
-        self.running_group.setLayout(running_layout)
-
-        #Recording Section
-        self.recording_group = QGroupBox("Recording")
-        recording_layout = QVBoxLayout()
-        recording_layout.addWidget(QLabel("Recording"))
-        self.recording_group.setLayout(recording_layout)
-        #Output Section
-        self.output_group = QGroupBox("DAQ Outputs")
-        output_layout = QVBoxLayout()
-        output_layout.addWidget(QLabel("Output"))
-        self.output_group.setLayout(output_layout)
-        '''
-        self.upper_layout.addWidget(self.running_group)
-        self.upper_layout.addWidget(self.recording_group)
-        '''
-        main_layout.addWidget(self.running_group)
-        main_layout.addWidget(self.output_group)
-        self.setLayout(main_layout)
-
+        self.recording_worker = RecordingWorker(self.record_queue, self.recording_flag)
+        
         # Connect Recording Signals
+        self.recording_worker.file_exception.connect(self.file_exception)
         self.recording_tab.start_recording_signal.connect(self.start_recording)
         self.recording_tab.stop_recording_signal.connect(self.stop_recording)
 
@@ -512,22 +606,30 @@ class MainWindow(QWidget):
     def stop_recording(self):
         self.recording_worker.stop_recording()
 
+    @pyqtSlot(str)
+    def file_exception(self, message):
+        QMessageBox.critical(self,"Error", message)
+
+    @pyqtSlot(int, int)
+    def input_update(self, button, value):
+        self.daq_worker.user_input(button, value)
+
     def stop_daq(self):
         self.daq_worker.stop()
-        self.recording_worker.stop_recording()
-        self.status_label.setText("DAQ Stopped")
+        self.recording_tab.stop_recording()
 
     def start_daq(self):
         self.handle_config_update(self.config_data)
         self.daq_worker.start()
-        self.status_label.setText("DAQ Running...")
 
     @pyqtSlot(dict)
     def handle_config_update(self, config):
         self.config_data = config
+        self.recording_worker.update_config(config)
+        self.recording_tab.stop_recording()
         self.daq_worker.update_config(config)
         self.plots_tab.update_config(config)
-        self.recording_worker.update_config(config)
+        self.output_tab.update_config(config)
 
 # === Run App ===
 app = QApplication(sys.argv)
