@@ -1,0 +1,70 @@
+{
+    "analog": [
+        {
+            "enabled": false,
+            "mode": "Ground"
+        },
+        {
+            "enabled": true,
+            "mode": "Ground"
+        },
+        {
+            "enabled": false,
+            "mode": "Ground"
+        },
+        {
+            "enabled": true,
+            "mode": "Reference"
+        },
+        {
+            "enabled": true,
+            "mode": "Ground"
+        },
+        {
+            "enabled": false,
+            "mode": "Ground"
+        },
+        {
+            "enabled": true,
+            "mode": "Ground"
+        },
+        {
+            "enabled": false,
+            "mode": "Ground"
+        }
+    ],
+    "digital": [
+        {
+            "enabled": true,
+            "mode": "Input"
+        },
+        {
+            "enabled": true,
+            "mode": "Input"
+        },
+        {
+            "enabled": true,
+            "mode": "Output"
+        },
+        {
+            "enabled": false,
+            "mode": "Input"
+        },
+        {
+            "enabled": false,
+            "mode": "Input"
+        },
+        {
+            "enabled": true,
+            "mode": "Input"
+        },
+        {
+            "enabled": true,
+            "mode": "Output"
+        },
+        {
+            "enabled": true,
+            "mode": "Input"
+        }
+    ]
+}

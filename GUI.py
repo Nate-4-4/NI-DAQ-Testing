@@ -497,7 +497,7 @@ class OutputTab(QWidget):
            button.setEnabled(False)
            button.setCheckable(True)
            button.clicked.connect(lambda checked, i = i: self.button_callback(i))
-           layout.addWidget(button, i % 4, i / 4)
+           layout.addWidget(button, i % 4, i // 4)
 
         self.setLayout(layout)
 
