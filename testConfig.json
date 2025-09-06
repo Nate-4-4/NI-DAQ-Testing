@@ -1,70 +1,80 @@
 {
-    "analog": [
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": true,
-            "mode": "Ground"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": true,
-            "mode": "Reference"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        },
-        {
-            "enabled": false,
-            "mode": "Ground"
-        }
-    ],
-    "digital": [
-        {
-            "enabled": true,
-            "mode": "Input"
-        },
-        {
-            "enabled": true,
-            "mode": "Input"
-        },
-        {
-            "enabled": true,
-            "mode": "Output"
-        },
-        {
-            "enabled": false,
-            "mode": "Input"
-        },
-        {
-            "enabled": false,
-            "mode": "Input"
-        },
-        {
-            "enabled": true,
-            "mode": "Input"
-        },
-        {
-            "enabled": true,
-            "mode": "Output"
-        },
-        {
-            "enabled": true,
-            "mode": "Input"
-        }
-    ]
+    "device": {
+        "model": "USB-6008",
+        "name": "Dev1"
+    },
+    "analog": {
+        "quantity": 8,
+        "settings": [
+            {
+                "enabled": false,
+                "mode": "Ground"
+            },
+            {
+                "enabled": true,
+                "mode": "Ground"
+            },
+            {
+                "enabled": false,
+                "mode": "Reference"
+            },
+            {
+                "enabled": false,
+                "mode": "Ground"
+            },
+            {
+                "enabled": true,
+                "mode": "Ground"
+            },
+            {
+                "enabled": false,
+                "mode": "Ground"
+            },
+            {
+                "enabled": false,
+                "mode": "Ground"
+            },
+            {
+                "enabled": false,
+                "mode": "Ground"
+            }
+        ]
+    },
+    "digital": {
+        "quantity": 8,
+        "settings": [
+            {
+                "enabled": false,
+                "mode": "Input"
+            },
+            {
+                "enabled": false,
+                "mode": "Input"
+            },
+            {
+                "enabled": true,
+                "mode": "Input"
+            },
+            {
+                "enabled": true,
+                "mode": "Output"
+            },
+            {
+                "enabled": false,
+                "mode": "Input"
+            },
+            {
+                "enabled": false,
+                "mode": "Input"
+            },
+            {
+                "enabled": true,
+                "mode": "Input"
+            },
+            {
+                "enabled": false,
+                "mode": "Input"
+            }
+        ]
+    }
 }
