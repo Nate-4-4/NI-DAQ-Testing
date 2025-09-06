@@ -32,14 +32,14 @@ class DAQWorker(QThread):
             timestamp = time.time() - self.start_time
             # Fake data for now
             dummy_data = {
-                'AI0': random.uniform(0, 5),
-                'AI1': random.uniform(0, 5),
-                'AI2': random.uniform(0, 5),
-                'AI3': random.uniform(0, 5),
-                'AI4': random.uniform(0, 5),
-                'AI5': random.uniform(0, 5),
-                'AI6': random.uniform(0, 5),
-                'AI7': random.uniform(0, 5),
+                'AI0': random.uniform(-5, 5),
+                'AI1': random.uniform(-5, 5),
+                'AI2': random.uniform(-5, 5),
+                'AI3': random.uniform(-5, 5),
+                'AI4': random.uniform(-5, 5),
+                'AI5': random.uniform(-5, 5),
+                'AI6': random.uniform(-5, 5),
+                'AI7': random.uniform(-5, 5),
                 'DIO0': math.floor(random.uniform(0, 1) + 0.5),
                 'DIO1': math.floor(random.uniform(0, 1) + 0.5),
                 'DIO2': math.floor(random.uniform(0, 1) + 0.5),
@@ -87,7 +87,7 @@ class DAQWorker(QThread):
                 self.user_input_channels.append(f"DIO{i}")
 
     def user_input(self, channel, value):
-        self.user_inputs[channel] = value
+        self.user_inputs[channel] = value  
 
                 
 
