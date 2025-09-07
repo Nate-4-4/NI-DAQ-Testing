@@ -1,81 +1,83 @@
 {
     "device": {
         "model": "USB-6008",
-        "name": "Dev1"
+        "name": "Dev1",
+        "sample_rate": 15.0
     },
     "analog": {
         "quantity": 8,
-        "settings": [
-            {
+        "settings": {
+            "A0":{
                 "enabled": false,
                 "mode": "Ground"
             },
-            {
+            "A1":{
                 "enabled": true,
                 "mode": "Ground"
             },
-            {
+            "A2":{
                 "enabled": false,
                 "mode": "Ground"
             },
-            {
+            "A3":{
                 "enabled": true,
                 "mode": "Reference"
             },
-            {
+            "A4":{
                 "enabled": false,
                 "mode": "Ground"
             },
-            {
+            "A5":{
                 "enabled": true,
                 "mode": "Ground"
             },
-            {
+            "A6":{
                 "enabled": false,
                 "mode": "Ground"
             },
-            {
+            "A7":{
                 "enabled": false,
                 "mode": "Ground"
             }
-        ]
+        }
     },
     "digital": {
         "quantity": 8,
-        "settings": [
-            {
+        "settings": {
+            "D0":{
                 "enabled": true,
-                "mode": "Input"
+                "mode": "Input",
+                "type": "Bidirectional"
             },
-            {
+            "D1":{
                 "enabled": false,
                 "mode": "Input"
             },
-            {
+            "D2":{
                 "enabled": true,
                 "mode": "Output"
             },
-            {
+            "D3":{
                 "enabled": true,
                 "mode": "Input"
             },
-            {
+            "D4":{
                 "enabled": true,
                 "mode": "Input"
             },
-            {
+            "D5":{
                 "enabled": true,
                 "mode": "Input"
             },
-            {
+            "D6":{
                 "enabled": true,
                 "mode": "Output"
             },
-            {
+            "D7":{
                 "enabled": true,
                 "mode": "Input"
             }
-        ]
+        }
     },
     "name": "Dev1"
 }

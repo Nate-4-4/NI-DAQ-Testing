@@ -1,7 +1,8 @@
 {
     "device": {
         "model": "USB-6008",
-        "name": "Dev1"
+        "name": "Dev1",
+        "sample_rate": 10
     },
     "analog": {
         "quantity": 8,

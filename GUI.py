@@ -3,8 +3,8 @@ import time
 import random
 import queue
 import csv
-from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QComboBox, QPushButton, QFileDialog, QMessageBox, QGroupBox, QGridLayout, QDialog, QDialogButtonBox
-from PyQt5.QtCore import QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QComboBox, QPushButton, QFileDialog, QMessageBox, QGroupBox, QGridLayout, QDialog, QDialogButtonBox, QLineEdit
+from PyQt5.QtCore import QThread, QTimer, pyqtSignal, pyqtSlot, Qt
 import pyqtgraph as pg
 import threading
 import json
@@ -194,7 +194,30 @@ class ConfigTab(QWidget):
 
         layout = QVBoxLayout()
 
-        # Save / Load Buttons
+        top_group_layout = QVBoxLayout()
+
+
+        # Current device / sample rate
+        top_layout = QHBoxLayout()
+        self.current_device_name = QLabel("Selected Device - None Selected")
+        self.current_sample = QLabel("Sample Rate - None Selected")
+        self.current_sample.setAlignment(Qt.AlignRight)
+        top_layout.addWidget(self.current_device_name)
+        top_layout.addWidget(self.current_sample)
+        top_group_layout.addLayout(top_layout)
+
+        #change sample rate
+        sample_layout = QHBoxLayout()
+        self.sample_rate_input = QLineEdit()
+        self.select_sample_rate_button = QPushButton("Set Sample Rate")
+        self.select_sample_rate_button.clicked.connect(self.changed_sample_rate)
+        sample_rate_unit = QLabel("Hz")
+        sample_layout.addWidget(self.select_sample_rate_button)
+        sample_layout.addWidget(self.sample_rate_input)
+        sample_layout.addWidget(sample_rate_unit)
+        top_group_layout.addLayout(sample_layout)
+
+        # Save / Load / Device / sample rate buttons
         self.loading_flag = False
         button_layout = QHBoxLayout()
         save_button = QPushButton("Save Config")
@@ -206,10 +229,14 @@ class ConfigTab(QWidget):
         button_layout.addWidget(save_button)
         button_layout.addWidget(load_button)
         button_layout.addWidget(choose_device_button)
-        layout.addLayout(button_layout)
+        top_group_layout.addLayout(button_layout)
 
+        # top group
+        layout.addLayout(top_group_layout, stretch=0)
+
+        
         # Analog Inputs Group
-        analog_group = QGroupBox("Analog Inputs (AI0 - AI7)")
+        analog_group = QGroupBox("Analog Inputs")
         analog_layout = QGridLayout()
         self.analog_widgets = []
         for i in range(self.get_num_digital_signals()):
@@ -229,10 +256,10 @@ class ConfigTab(QWidget):
                 mode_cb.currentIndexChanged.connect(self.update_config) #dropdowns for AI4-7 cannot be changed
 
         analog_group.setLayout(analog_layout)
-        layout.addWidget(analog_group)
+        layout.addWidget(analog_group, stretch=1)
 
         # Digital IO Group
-        digital_group = QGroupBox("Digital IO (DIO0 - DIO7)")
+        digital_group = QGroupBox("Digital IO")
         digital_layout = QGridLayout()
         self.digital_widgets = []
         for i in range(self.get_num_digital_signals()):
@@ -247,10 +274,7 @@ class ConfigTab(QWidget):
             mode_cb.currentIndexChanged.connect(self.update_config)
 
         digital_group.setLayout(digital_layout)
-        layout.addWidget(digital_group)
-
-        
-
+        layout.addWidget(digital_group, stretch=1)
         self.setLayout(layout)
 
     def update_config(self):
@@ -273,7 +297,7 @@ class ConfigTab(QWidget):
         for i, (enable_cb, mode_cb) in enumerate(self.digital_widgets):
             self.config_data['digital']['settings'][i]['enabled'] = enable_cb.isChecked()
             self.config_data['digital']['settings'][i]['mode'] = mode_cb.currentText()
-
+        
         self.config_changed.emit(self.config_data)
 
     def save_config(self):
@@ -297,6 +321,7 @@ class ConfigTab(QWidget):
                     if(device):
                         new_config['device']['name'] = device['name']
                         new_config['device']['model'] = device['model']
+                        self.validate_config(new_config)
                         self.config_data = new_config
                         self.apply_config_to_ui()
             except Exception as e:
@@ -304,14 +329,27 @@ class ConfigTab(QWidget):
 
     def apply_config_to_ui(self):
         self.loading_flag = True
-        for i, (enable_cb, mode_cb) in enumerate(self):
+
+        #Analog Widgets
+        if(len(self.analog_widgets) != self.config_data['analog']['quantity']):
+            print('t')
+        for i, (enable_cb, mode_cb) in enumerate(self.analog_widgets):
             enable_cb.setChecked(self.config_data['analog']['settings'][i]['enabled'])
             mode_cb.setCurrentText(self.config_data['analog']['settings'][i]['mode'])
 
+        #Digital Widgets
+        if(len(self.digital_widgets) != self.config_data['digital']['quantity']):
+            print('t1')
         for i, (enable_cb, mode_cb) in enumerate(self.digital_widgets):
             enable_cb.setChecked(self.config_data['digital']['settings'][i]['enabled'])
             mode_cb.setCurrentText(self.config_data['digital']['settings'][i]['mode'])
         self.loading_flag = False
+
+        #Top Widgets
+        self.update_device_text()
+        self.update_sample_rate_text()
+
+        #Update config for self and others
         self.update_config()
 
 
@@ -329,6 +367,50 @@ class ConfigTab(QWidget):
         
     def select_any_device(self):
         device = self.select_device(None)
+        self.config_data['device']['name'] = device['name']
+        self.config_data['device']['model'] = device['model']
+        self.apply_config_to_ui()
+
+    def update_device_text(self):
+        if(self.config_data['device']['model'] and self.config_data['device']['name']):
+            self.current_device_name.setText(f"Selected Device - {self.config_data['device']['name']} ({self.config_data['device']['model']})")
+        else:
+            self.current_device_name.setText(f"Selected Device - None")
+
+    def update_sample_rate_text(self):
+        if(self.config_data['device']['sample_rate']):
+            self.current_sample.setText(f"Sample Rate - {self.config_data['device']['sample_rate']}Hz")
+        else:
+            self.current_sample.setText(f"Sample Rate - None")
+
+    def changed_sample_rate(self):
+        input_val = self.sample_rate_input.text()
+        try:
+            if not input_val:
+                raise Exception("No value")
+            value = float(input_val)
+            if(value <= 0):
+                raise Exception("Sample rate cannot be negative")
+            if(value > 1e6):
+                raise Exception("Sample rate is too large")
+            self.config_data['device']['sample_rate'] = value
+            self.apply_config_to_ui()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Invalid sample rate: {e}")
+
+    def query_num_analog_channels(self, name):
+        system = System.local()
+        dev = system.devices[name]
+        return list(dev.ai_physical_chans)
+
+    def query_num_digital_channels(self, name):
+        system = System.local()
+        dev = system.devices[name]
+        return list(dev.ai_physical_chans)
+
+    def validate_config(self, config):
+        pass
+
         
 
 # === Plots Tab with PyQtGraph ===
@@ -588,7 +670,7 @@ class MainWindow(QWidget):
         self.record_queue = queue.Queue(maxsize=1000)
         self.recording_flag = threading.Event()
         self.config_data = {
-            'device': {'model': None, 'name': None},
+            'device': {'model': None, 'name': None, 'sample_rate': None},
             'analog': {'quantity':8, 'settings': [{'enabled': False, 'mode': 'Ground'} for _ in range(8)]},
             'digital': {'quantity':8, 'settings': [{'enabled': False, 'mode': 'Input'} for _ in range(8)]}
         }
