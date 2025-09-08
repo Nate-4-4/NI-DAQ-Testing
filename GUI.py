@@ -34,22 +34,22 @@ class DAQWorker(QThread):
             timestamp = time.time() - self.start_time
             # Fake data for now
             dummy_data = {
-                'AI0': random.uniform(-5, 5),
-                'AI1': random.uniform(-5, 5),
-                'AI2': random.uniform(-5, 5),
-                'AI3': random.uniform(-5, 5),
-                'AI4': random.uniform(-5, 5),
-                'AI5': random.uniform(-5, 5),
-                'AI6': random.uniform(-5, 5),
-                'AI7': random.uniform(-5, 5),
-                'DIO0': math.floor(random.uniform(0, 1) + 0.5),
-                'DIO1': math.floor(random.uniform(0, 1) + 0.5),
-                'DIO2': math.floor(random.uniform(0, 1) + 0.5),
-                'DIO3': math.floor(random.uniform(0, 1) + 0.5),
-                'DIO4': math.floor(random.uniform(0, 1) + 0.5),
-                'DIO5': math.floor(random.uniform(0, 1) + 0.5),
-                'DIO6': math.floor(random.uniform(0, 1) + 0.5),
-                'DIO7': math.floor(random.uniform(0, 1) + 0.5),
+                'A0': random.uniform(-5, 5),
+                'A1': random.uniform(-5, 5),
+                'A2': random.uniform(-5, 5),
+                'A3': random.uniform(-5, 5),
+                'A4': random.uniform(-5, 5),
+                'A5': random.uniform(-5, 5),
+                'A6': random.uniform(-5, 5),
+                'A7': random.uniform(-5, 5),
+                'D0.0': math.floor(random.uniform(0, 1) + 0.5),
+                'D0.1': math.floor(random.uniform(0, 1) + 0.5),
+                'D0.2': math.floor(random.uniform(0, 1) + 0.5),
+                'D0.3': math.floor(random.uniform(0, 1) + 0.5),
+                'D0.4': math.floor(random.uniform(0, 1) + 0.5),
+                'D0.5': math.floor(random.uniform(0, 1) + 0.5),
+                'D0.6': math.floor(random.uniform(0, 1) + 0.5),
+                'D0.7': math.floor(random.uniform(0, 1) + 0.5),
             }
             data = {
                 'timestamp': timestamp,
@@ -76,17 +76,15 @@ class DAQWorker(QThread):
 
     def update_config(self, config):
         self.active_channels = []
-        for i in range(config['analog']['quantity']):
-            if(config['analog']['settings'][i]['enabled']):
-                self.active_channels.append(f"AI{i}")
-        for i in range(config['digital']['quantity']):
-            if(config['digital']['settings'][i]['enabled'] and config['digital']['settings'][i]['mode'] == 'Input'):
-                self.active_channels.append(f"DIO{i}")
+        for channel in config['analog'].keys():
+            if(config['analog'][channel]['enabled']):
+                self.active_channels.append(channel)
         self.user_inputs = {}
-        for i in range(config['digital']['quantity']):
-            self.user_inputs[i] = 0
-            if(config['digital']['settings'][i]['enabled'] and config['digital']['settings'][i]['mode'] == 'Output'):
-                self.user_input_channels.append(f"DIO{i}")
+        for channel in config['digital'].keys():
+            self.active_channels.append(channel)
+            if(config['digital'][channel]['enabled'] and config['digital'][channel]['mode'] == 'Input'):
+                self.user_inputs[channel] = 0
+            
 
     def user_input(self, channel, value):
         self.user_inputs[channel] = value  
@@ -176,12 +174,12 @@ class RecordingWorker(QThread):
         self.stop_recording()
         #update active channels
         self.active_channels = []
-        for i in range(config['analog']['quantity']):
-            if(config['analog']['settings'][i]['enabled']):
-                self.active_channels.append(f"AI{i}")
-        for i in range(config['digital']['quantity']):
-            if(config['digital']['settings'][i]['enabled']):
-                self.active_channels.append(f"DIO{i}")
+        for channel in config['analog'].keys():
+            if(config['analog'][channel]['enabled']):
+                self.active_channels.append(channel)
+        for channel in config['digital'].keys():
+            if(config['digital'][channel]['enabled']):
+                self.active_channels.append(channel)
 
 # === Config Tab (Placeholder) ===
 class ConfigTab(QWidget):
@@ -189,14 +187,11 @@ class ConfigTab(QWidget):
 
     def __init__(self, config_data):
         super().__init__()
-
         self.config_data = config_data
 
         layout = QVBoxLayout()
 
         top_group_layout = QVBoxLayout()
-
-
         # Current device / sample rate
         top_layout = QHBoxLayout()
         self.current_device_name = QLabel("Selected Device - None Selected")
@@ -237,43 +232,19 @@ class ConfigTab(QWidget):
         
         # Analog Inputs Group
         analog_group = QGroupBox("Analog Inputs")
-        analog_layout = QGridLayout()
-        self.analog_widgets = []
-        for i in range(self.get_num_digital_signals()):
-            enable_cb = QCheckBox(f"AI{i}")
-            mode_cb = QComboBox()
-            if(i<4):
-                mode_cb.addItems(['Ground', 'Reference']) #AI0-3 can use reference or ground mode
-            else:
-                mode_cb.addItem('Ground') #AI4-7 can only use ground mode
-                mode_cb.setEnabled(False)
-            analog_layout.addWidget(enable_cb, i, 0)
-            analog_layout.addWidget(mode_cb, i, 1)
-            self.analog_widgets.append((enable_cb, mode_cb))
+        self.analog_layout = QVBoxLayout()
+        self.analog_widgets = {}
+        
 
-            enable_cb.stateChanged.connect(self.update_config)
-            if(i<4):
-                mode_cb.currentIndexChanged.connect(self.update_config) #dropdowns for AI4-7 cannot be changed
-
-        analog_group.setLayout(analog_layout)
+        analog_group.setLayout(self.analog_layout)
         layout.addWidget(analog_group, stretch=1)
 
         # Digital IO Group
         digital_group = QGroupBox("Digital IO")
-        digital_layout = QGridLayout()
-        self.digital_widgets = []
-        for i in range(self.get_num_digital_signals()):
-            enable_cb = QCheckBox(f"DIO{i}")
-            mode_cb = QComboBox()
-            mode_cb.addItems(['Input', 'Output'])
-            digital_layout.addWidget(enable_cb, i, 0)
-            digital_layout.addWidget(mode_cb, i, 1)
-            self.digital_widgets.append((enable_cb, mode_cb))
-
-            enable_cb.stateChanged.connect(self.update_config)
-            mode_cb.currentIndexChanged.connect(self.update_config)
-
-        digital_group.setLayout(digital_layout)
+        self.digital_layout = QVBoxLayout()
+        self.digital_widgets = {}
+        
+        digital_group.setLayout(self.digital_layout)
         layout.addWidget(digital_group, stretch=1)
         self.setLayout(layout)
 
@@ -281,22 +252,14 @@ class ConfigTab(QWidget):
         if(self.loading_flag): 
             return
         # Read analog configurations
-        for i, (enable_cb, mode_cb) in enumerate(self.analog_widgets):
-            self.config_data['analog']['settings'][i]['enabled'] = enable_cb.isChecked()
-            self.config_data['analog']['settings'][i]['mode'] = mode_cb.currentText()
-
-        # Handle AI(n+4) disable logic
-        for i in range(4):
-            if self.analog_widgets[i][1].currentText() == 'Reference':
-                self.analog_widgets[i+4][0].setChecked(False)
-                self.analog_widgets[i+4][0].setEnabled(False)
-            else:
-                self.analog_widgets[i+4][0].setEnabled(True)
+        for channel_name in self.config_data['analog'].keys():
+            self.config_data['analog'][channel_name]['enabled'] = self.analog_widgets[channel_name]['enable_cb'].isChecked()
+            self.config_data['analog'][channel_name]['mode'] = self.analog_widgets[channel_name]['mode_cb'].currentText()
 
         # Read digital configurations
-        for i, (enable_cb, mode_cb) in enumerate(self.digital_widgets):
-            self.config_data['digital']['settings'][i]['enabled'] = enable_cb.isChecked()
-            self.config_data['digital']['settings'][i]['mode'] = mode_cb.currentText()
+        for channel_name in self.config_data['digital'].keys():
+            self.config_data['digital'][channel_name]['enabled'] = self.digital_widgets[channel_name]['enable_cb'].isChecked()
+            self.config_data['digital'][channel_name]['mode'] = self.digital_widgets[channel_name]['mode_cb'].currentText()
         
         self.config_changed.emit(self.config_data)
 
@@ -323,26 +286,53 @@ class ConfigTab(QWidget):
                         new_config['device']['model'] = device['model']
                         self.validate_config(new_config)
                         self.config_data = new_config
-                        self.apply_config_to_ui()
+                        self.update_ui_layout()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load config: {e}")
+
+    def update_ui_layout(self):
+        #Analog Widgets
+        self.analog_widgets = {}
+        ConfigTab.clear_layout(self.analog_layout)
+        for channel_name in self.config_data['analog'].keys():
+            layout = QHBoxLayout()
+            channel_widgets = {'enable_cb':QCheckBox(channel_name), 'mode_cb':QComboBox()}
+            channel_widgets['mode_cb'].addItems(self.config_data['analog'][channel_name]['modes'])
+            channel_widgets['mode_cb'].currentIndexChanged.connect(self.update_config)
+            channel_widgets['enable_cb'].stateChanged.connect(self.update_config)
+            layout.addWidget(channel_widgets['enable_cb'])
+            layout.addWidget(channel_widgets['mode_cb'])
+            self.analog_widgets[channel_name] = channel_widgets
+            self.analog_layout.addLayout(layout)
+
+        #Digital Widgets
+        self.digital_widgets = {}
+        ConfigTab.clear_layout(self.digital_layout)
+        for channel_name in self.config_data['digital'].keys():
+            layout = QHBoxLayout()
+            channel_widgets = {'enable_cb':QCheckBox(channel_name), 'mode_cb':QComboBox()}
+            channel_widgets['mode_cb'].addItems(self.config_data['digital'][channel_name]['modes'])
+            channel_widgets['mode_cb'].currentIndexChanged.connect(self.update_config)
+            channel_widgets['enable_cb'].stateChanged.connect(self.update_config)
+            layout.addWidget(channel_widgets['enable_cb'])
+            layout.addWidget(channel_widgets['mode_cb'])
+            self.digital_widgets[channel_name] = channel_widgets
+            self.digital_layout.addLayout(layout)
+
+        self.apply_config_to_ui()
 
     def apply_config_to_ui(self):
         self.loading_flag = True
 
         #Analog Widgets
-        if(len(self.analog_widgets) != self.config_data['analog']['quantity']):
-            print('t')
-        for i, (enable_cb, mode_cb) in enumerate(self.analog_widgets):
-            enable_cb.setChecked(self.config_data['analog']['settings'][i]['enabled'])
-            mode_cb.setCurrentText(self.config_data['analog']['settings'][i]['mode'])
+        for channel_name in self.config_data['analog'].keys():
+            self.analog_widgets[channel_name]['enable_cb'].setChecked(self.config_data['analog'][channel_name]['enabled'])
+            self.analog_widgets[channel_name]['mode_cb'].setCurrentText(self.config_data['analog'][channel_name]['mode'])
 
         #Digital Widgets
-        if(len(self.digital_widgets) != self.config_data['digital']['quantity']):
-            print('t1')
-        for i, (enable_cb, mode_cb) in enumerate(self.digital_widgets):
-            enable_cb.setChecked(self.config_data['digital']['settings'][i]['enabled'])
-            mode_cb.setCurrentText(self.config_data['digital']['settings'][i]['mode'])
+        for channel_name in self.config_data['digital'].keys():
+            self.digital_widgets[channel_name]['enable_cb'].setChecked(self.config_data['digital'][channel_name]['enabled'])
+            self.digital_widgets[channel_name]['mode_cb'].setCurrentText(self.config_data['digital'][channel_name]['mode'])
         self.loading_flag = False
 
         #Top Widgets
@@ -410,6 +400,18 @@ class ConfigTab(QWidget):
 
     def validate_config(self, config):
         pass
+
+    def clear_layout(layout):
+        while layout.count():
+            item = layout.takeAt(0)  # take the first item
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()  # safely delete widget
+            else:
+                # If it's another layout, clear it recursively
+                sub_layout = item.layout()
+                if sub_layout is not None:
+                    ConfigTab.clear_layout(sub_layout)
 
         
 
@@ -493,7 +495,7 @@ class PlotsTab(QWidget):
         # === ANALOG ===
         # Remove curves for analog channels that are no longer active
         for ch_idx in list(self.active_channels):
-            if not config['analog']['settings'][ch_idx]['enabled']:
+            if not config['analog'][ch_idx]['enabled']:
                 self.plot_widget.removeItem(self.curves[ch_idx])
                 del self.curves[ch_idx]
                 del self.y_data[ch_idx]
@@ -502,12 +504,12 @@ class PlotsTab(QWidget):
                 self.y_data[ch_idx] = []
 
         # Add curves for newly active analog channels
-        for ch_idx, settings in enumerate(config['analog']['settings']):
-            if settings['enabled'] and ch_idx not in self.active_channels:
+        for channel in config['analog'].keys():
+            if config['analog'][channel]['enabled'] and channel not in self.active_channels:
                 pen_color = pg.intColor(len(self.curves))
-                self.curves[ch_idx] = self.plot_widget.plot(pen=pen_color, name=f"AI{ch_idx}")
-                self.y_data[ch_idx] = []
-                self.active_channels.append(ch_idx)
+                self.curves[channel] = self.plot_widget.plot(pen=pen_color, name=channel)
+                self.y_data[channel] = []
+                self.active_channels.append(channel)
 
         # === DIGITAL ===
         # Remove previous digital waveforms
@@ -518,21 +520,21 @@ class PlotsTab(QWidget):
         self.active_digital_channels = []
             
         # Add curves for newly active digital channels
-        for ch_idx, settings in enumerate(config['digital']['settings']): 
-            if settings['enabled']:
+        for channel in config['digital'].keys(): 
+            if config['digital'][channel]['enabled']:
                 pen_color = pg.intColor(len(self.waveforms))
-                self.waveforms[ch_idx] = self.digital_plot_widget.plot([0, 0], [0], pen=pen_color, stepMode=True, name=f"DIO{ch_idx}")
-                self.bool_data[ch_idx] = []
-                self.active_digital_channels.append(ch_idx)
+                self.waveforms[channel] = self.digital_plot_widget.plot([0, 0], [0], pen=pen_color, stepMode=True, name=channel)
+                self.bool_data[channel] = []
+                self.active_digital_channels.append(channel)
 
         # Update digital channel plot 
         y_axis = self.digital_plot_widget.getAxis('left')
         ticks = []
-        for i in range(0,len(self.active_digital_channels)):
-            if(config['digital']['settings'][self.active_digital_channels[i]]['mode'] == "Input"):
-                ticks.append((i+0.5, f"DI{self.active_digital_channels[i]}"))
-            else:
-                ticks.append((i+0.5, f"DO{self.active_digital_channels[i]}"))
+        count = 0
+        for channel in self.active_digital_channels:
+            ticks.append([count+0.5, channel])
+            count = count+1
+            
         y_axis.setTicks([ticks])
         self.digital_plot_widget.setYRange(0, len(self.active_digital_channels))
 
@@ -639,7 +641,7 @@ class OutputTab(QWidget):
            button = self.buttons[i]
            button.setEnabled(False)
            button.setCheckable(True)
-           button.clicked.connect(lambda checked, i = i: self.button_callback(i))
+           button.clicked.connect(lambda _, i = i: self.button_callback(i))
            layout.addWidget(button, i % 4, i // 4)
 
         self.setLayout(layout)
@@ -670,9 +672,13 @@ class MainWindow(QWidget):
         self.record_queue = queue.Queue(maxsize=1000)
         self.recording_flag = threading.Event()
         self.config_data = {
-            'device': {'model': None, 'name': None, 'sample_rate': None},
-            'analog': {'quantity':8, 'settings': [{'enabled': False, 'mode': 'Ground'} for _ in range(8)]},
-            'digital': {'quantity':8, 'settings': [{'enabled': False, 'mode': 'Input'} for _ in range(8)]}
+            'device': {
+                'model': None, 
+                'name': None, 
+                'sample_rate': None
+                },
+            'analog': {},
+            'digital': {}
         }
 
         # DAQ Thread
@@ -773,7 +779,7 @@ class MainWindow(QWidget):
         self.recording_tab.stop_recording()
         self.daq_worker.update_config(config)
         self.plots_tab.update_config(config)
-        self.output_tab.update_config(config)
+        #self.output_tab.update_config(config)
 
 # === Run App ===
 app = QApplication(sys.argv)

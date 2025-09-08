@@ -2,80 +2,134 @@
     "device": {
         "model": "USB-6008",
         "name": "Dev1",
-        "sample_rate": 10
+        "sample_rate": 25.0
     },
     "analog": {
-        "quantity": 8,
-        "settings": [
-            {
-                "enabled": false,
-                "mode": "Ground"
-            },
-            {
-                "enabled": true,
-                "mode": "Ground"
-            },
-            {
-                "enabled": false,
-                "mode": "Reference"
-            },
-            {
-                "enabled": false,
-                "mode": "Ground"
-            },
-            {
-                "enabled": true,
-                "mode": "Ground"
-            },
-            {
-                "enabled": false,
-                "mode": "Ground"
-            },
-            {
-                "enabled": false,
-                "mode": "Ground"
-            },
-            {
-                "enabled": false,
-                "mode": "Ground"
-            }
-        ]
+        "A0": {
+            "enabled": true,
+            "mode": "Ground",
+            "modes": [
+                "Ground",
+                "Reference"
+            ]
+        },
+        "A1": {
+            "enabled": true,
+            "mode": "Reference",
+            "modes": [
+                "Ground",
+                "Reference"
+            ]
+        },
+        "A2": {
+            "enabled": false,
+            "mode": "Ground",
+            "modes": [
+                "Ground",
+                "Reference"
+            ]
+        },
+        "A3": {
+            "enabled": true,
+            "mode": "Reference",
+            "modes": [
+                "Ground",
+                "Reference"
+            ]
+        },
+        "A4": {
+            "enabled": false,
+            "mode": "Ground",
+            "modes": [
+                "Ground"
+            ]
+        },
+        "A5": {
+            "enabled": true,
+            "mode": "Ground",
+            "modes": [
+                "Ground"
+            ]
+        },
+        "A6": {
+            "enabled": false,
+            "mode": "Ground",
+            "modes": [
+                "Ground"
+            ]
+        },
+        "A7": {
+            "enabled": false,
+            "mode": "Ground",
+            "modes": [
+                "Ground"
+            ]
+        }
     },
     "digital": {
-        "quantity": 8,
-        "settings": [
-            {
-                "enabled": false,
-                "mode": "Input"
-            },
-            {
-                "enabled": false,
-                "mode": "Input"
-            },
-            {
-                "enabled": true,
-                "mode": "Input"
-            },
-            {
-                "enabled": true,
-                "mode": "Output"
-            },
-            {
-                "enabled": false,
-                "mode": "Input"
-            },
-            {
-                "enabled": false,
-                "mode": "Input"
-            },
-            {
-                "enabled": true,
-                "mode": "Input"
-            },
-            {
-                "enabled": false,
-                "mode": "Input"
-            }
-        ]
+        "D0.0": {
+            "enabled": true,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "D0.1": {
+            "enabled": false,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "D0.2": {
+            "enabled": true,
+            "mode": "Output",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "D0.3": {
+            "enabled": false,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "D0.4": {
+            "enabled": false,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "D0.5": {
+            "enabled": false,
+            "mode": "Output",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "D0.6": {
+            "enabled": true,
+            "mode": "Output",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "D0.7": {
+            "enabled": true,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        }
     }
 }
