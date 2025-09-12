@@ -20,5 +20,8 @@ for dev in system.devices:
     print(f"  Digital Output Ports:   {len(do_chans)}")
     print("-" * 40)
 
+    for ch in ai_chans:
+        print(ch.name)
+
     for port in dev.di_ports:
         print(f"{port.name} has {port.di_port_width} lines")

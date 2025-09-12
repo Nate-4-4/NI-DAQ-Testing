@@ -2,80 +2,72 @@
     "device": {
         "model": "USB-6008",
         "name": "Dev1",
-        "sample_rate": 20.0
+        "sample_rate": 10
     },
     "analog": {
-        "A0": {
-            "enabled": true,
-            "mode": "Ground",
-            "modes": [
-                "Ground",
-                "Reference"
-            ]
-        },
-        "A1": {
-            "enabled": true,
-            "mode": "Reference",
-            "modes": [
-                "Ground",
-                "Reference"
-            ]
-        },
-        "A2": {
+        "ai0": {
             "enabled": false,
-            "mode": "Ground",
+            "mode": "RSE",
             "modes": [
-                "Ground",
-                "Reference"
+                "RSE",
+                "DIFFERENTIAL"
             ]
         },
-        "A3": {
-            "enabled": true,
-            "mode": "Reference",
-            "modes": [
-                "Ground",
-                "Reference"
-            ]
-        },
-        "A4": {
+        "ai1": {
             "enabled": false,
-            "mode": "Ground",
+            "mode": "RSE",
             "modes": [
-                "Ground"
+                "RSE",
+                "DIFFERENTIAL"
             ]
         },
-        "A5": {
-            "enabled": true,
-            "mode": "Ground",
-            "modes": [
-                "Ground"
-            ]
-        },
-        "A6": {
+        "ai2": {
             "enabled": false,
-            "mode": "Ground",
+            "mode": "RSE",
             "modes": [
-                "Ground"
+                "RSE",
+                "DIFFERENTIAL"
             ]
         },
-        "A7": {
+        "ai3": {
             "enabled": false,
-            "mode": "Ground",
+            "mode": "RSE",
             "modes": [
-                "Ground"
+                "RSE",
+                "DIFFERENTIAL"
+            ]
+        },
+        "ai4": {
+            "enabled": false,
+            "mode": "RSE",
+            "modes": [
+                "RSE"
+            ]
+        },
+        "ai5": {
+            "enabled": false,
+            "mode": "RSE",
+            "modes": [
+                "RSE"
+            ]
+        },
+        "ai6": {
+            "enabled": false,
+            "mode": "RSE",
+            "modes": [
+                "RSE"
+            ]
+        },
+        "ai7": {
+            "enabled": false,
+            "mode": "RSE",
+            "modes": [
+                "RSE"
             ]
         }
     },
     "digital": {
-        "D0.0": {
-            "enabled": true,
-            "mode": "Input",
-            "modes": [
-                "Input",
-                "Output"
-            ]
-        },
-        "D0.1": {
+        "port0/line0": {
             "enabled": false,
             "mode": "Input",
             "modes": [
@@ -83,48 +75,88 @@
                 "Output"
             ]
         },
-        "D0.2": {
-            "enabled": true,
-            "mode": "Output",
-            "modes": [
-                "Input",
-                "Output"
-            ]
-        },
-        "D0.3": {
-            "enabled": true,
+        "port0/line1": {
+            "enabled": false,
             "mode": "Input",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
-        "D0.4": {
-            "enabled": true,
+        "port0/line2": {
+            "enabled": false,
             "mode": "Input",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
-        "D0.5": {
-            "enabled": true,
-            "mode": "Output",
+        "port0/line3": {
+            "enabled": false,
+            "mode": "Input",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
-        "D0.6": {
-            "enabled": true,
-            "mode": "Output",
+        "port0/line4": {
+            "enabled": false,
+            "mode": "Input",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
-        "D0.7": {
-            "enabled": true,
+        "port0/line5": {
+            "enabled": false,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "port0/line6": {
+            "enabled": false,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "port0/line7": {
+            "enabled": false,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "port1/line0": {
+            "enabled": false,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "port1/line1": {
+            "enabled": false,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "port1/line2": {
+            "enabled": false,
+            "mode": "Input",
+            "modes": [
+                "Input",
+                "Output"
+            ]
+        },
+        "port1/line3": {
+            "enabled": false,
             "mode": "Input",
             "modes": [
                 "Input",

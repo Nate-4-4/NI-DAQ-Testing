@@ -12,6 +12,49 @@ import math
 
 from nidaqmx.system import System
 
+# === general functions ===
+
+def clear_layout(layout):
+        while layout.count():
+            item = layout.takeAt(0)  # take the first item
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()  # safely delete widget
+            else:
+                # If it's another layout, clear it recursively
+                sub_layout = item.layout()
+                if sub_layout is not None:
+                    clear_layout(sub_layout)
+
+# ===DAQ general functions===  
+def get_system_name_from_daq_name(daq_name: str) -> str:
+    if '/' not in daq_name:
+        raise ValueError(f"Invalid channel string: {daq_name}")
+    return daq_name.split('/', 1)[1]
+
+def make_default_config(name: str) -> dict:
+    system = System.local()
+    dev = system.devices[name]
+    config = {'device':{'model': dev.product_type, 'name': dev.name, 'sample_rate': 10}, 'analog':{}, 'digital':{}}
+    #detect analog channels
+    for ai_channel in list(dev.ai_physical_chans):
+        config['analog'][get_system_name_from_daq_name(ai_channel.name)] = {'enabled': False, 'mode': ai_channel.ai_term_cfgs[0].name, 'modes': [ch.name for ch in ai_channel.ai_term_cfgs]}
+    #detect digital channels
+    for digital_input_channel in dev.di_lines:
+        config['digital'][get_system_name_from_daq_name(digital_input_channel.name)] = {'enabled': False, 'mode': 'Input', 'modes': ['Input']}
+    for digital_output_channel in dev.do_lines:
+        if(digital_output_channel.name in [ch.name for ch in dev.di_lines]):
+            config['digital'][get_system_name_from_daq_name(digital_output_channel.name)]['modes'] = ["Input", "Output"]
+        else:
+            config['digital'][get_system_name_from_daq_name(digital_output_channel.name)] = {'enabled': False, 'mode': 'Output', 'modes': ['Output']}
+            
+    return config
+    
+    
+
+
+
+
 # === DAQ Worker Thread (Dummy Data Generator) ===
 class DAQWorker(QThread):
 
@@ -184,6 +227,7 @@ class RecordingWorker(QThread):
 # === Config Tab (Placeholder) ===
 class ConfigTab(QWidget):
     config_changed = pyqtSignal(dict)
+    structure_changed = pyqtSignal(dict)
 
     def __init__(self, config_data):
         super().__init__()
@@ -194,8 +238,8 @@ class ConfigTab(QWidget):
         top_group_layout = QVBoxLayout()
         # Current device / sample rate
         top_layout = QHBoxLayout()
-        self.current_device_name = QLabel("Selected Device - None Selected")
-        self.current_sample = QLabel("Sample Rate - None Selected")
+        self.current_device_name = QLabel("Selected Device: None Selected")
+        self.current_sample = QLabel("Current Sample Rate: None Selected")
         self.current_sample.setAlignment(Qt.AlignRight)
         top_layout.addWidget(self.current_device_name)
         top_layout.addWidget(self.current_sample)
@@ -293,7 +337,7 @@ class ConfigTab(QWidget):
     def update_ui_layout(self):
         #Analog Widgets
         self.analog_widgets = {}
-        ConfigTab.clear_layout(self.analog_layout)
+        clear_layout(self.analog_layout)
         for channel_name in self.config_data['analog'].keys():
             layout = QHBoxLayout()
             channel_widgets = {'enable_cb':QCheckBox(channel_name), 'mode_cb':QComboBox()}
@@ -307,7 +351,7 @@ class ConfigTab(QWidget):
 
         #Digital Widgets
         self.digital_widgets = {}
-        ConfigTab.clear_layout(self.digital_layout)
+        clear_layout(self.digital_layout)
         for channel_name in self.config_data['digital'].keys():
             layout = QHBoxLayout()
             channel_widgets = {'enable_cb':QCheckBox(channel_name), 'mode_cb':QComboBox()}
@@ -318,7 +362,7 @@ class ConfigTab(QWidget):
             layout.addWidget(channel_widgets['mode_cb'])
             self.digital_widgets[channel_name] = channel_widgets
             self.digital_layout.addLayout(layout)
-
+        self.structure_changed.emit(self.config_data)
         self.apply_config_to_ui()
 
     def apply_config_to_ui(self):
@@ -357,21 +401,20 @@ class ConfigTab(QWidget):
         
     def select_any_device(self):
         device = self.select_device(None)
-        self.config_data['device']['name'] = device['name']
-        self.config_data['device']['model'] = device['model']
-        self.apply_config_to_ui()
+        self.config_data = make_default_config(device['name'])
+        self.update_ui_layout()
 
     def update_device_text(self):
         if(self.config_data['device']['model'] and self.config_data['device']['name']):
-            self.current_device_name.setText(f"Selected Device - {self.config_data['device']['name']} ({self.config_data['device']['model']})")
+            self.current_device_name.setText(f"Selected Device: {self.config_data['device']['name']} ({self.config_data['device']['model']})")
         else:
-            self.current_device_name.setText(f"Selected Device - None")
+            self.current_device_name.setText(f"Selected Device: None")
 
     def update_sample_rate_text(self):
         if(self.config_data['device']['sample_rate']):
-            self.current_sample.setText(f"Sample Rate - {self.config_data['device']['sample_rate']}Hz")
+            self.current_sample.setText(f"Current Sample Rate: {self.config_data['device']['sample_rate']}Hz")
         else:
-            self.current_sample.setText(f"Sample Rate - None")
+            self.current_sample.setText(f"Current Sample Rate: None Selected")
 
     def changed_sample_rate(self):
         input_val = self.sample_rate_input.text()
@@ -388,30 +431,11 @@ class ConfigTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Invalid sample rate: {e}")
 
-    def query_num_analog_channels(self, name):
-        system = System.local()
-        dev = system.devices[name]
-        return list(dev.ai_physical_chans)
-
-    def query_num_digital_channels(self, name):
-        system = System.local()
-        dev = system.devices[name]
-        return list(dev.ai_physical_chans)
+    
 
     def validate_config(self, config):
         pass
 
-    def clear_layout(layout):
-        while layout.count():
-            item = layout.takeAt(0)  # take the first item
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()  # safely delete widget
-            else:
-                # If it's another layout, clear it recursively
-                sub_layout = item.layout()
-                if sub_layout is not None:
-                    ConfigTab.clear_layout(sub_layout)
 
         
 
@@ -495,7 +519,7 @@ class PlotsTab(QWidget):
         # === ANALOG ===
         # Remove curves for analog channels that are no longer active
         for ch_idx in list(self.active_channels):
-            if not config['analog'][ch_idx]['enabled']:
+            if not ch_idx in config['analog'].keys() or not config['analog'][ch_idx]['enabled']:
                 self.plot_widget.removeItem(self.curves[ch_idx])
                 del self.curves[ch_idx]
                 del self.y_data[ch_idx]
@@ -630,21 +654,14 @@ class ControlTab(QWidget):
 
 # === Start/Stop Tab ===
 class OutputTab(QWidget):
-    update_output_signal = pyqtSignal(int, int)
+    update_output_signal = pyqtSignal(str, int)
 
     def __init__(self):
         super().__init__()
-        layout = QGridLayout()
+        self.layout = QGridLayout()
         self.status_label = QLabel("DAQ Stoped")
-        self.buttons = [QPushButton(f"DO{i}") for i in range(0,8)]
-        for i in range(0,len(self.buttons)):
-           button = self.buttons[i]
-           button.setEnabled(False)
-           button.setCheckable(True)
-           button.clicked.connect(lambda _, i = i: self.button_callback(i))
-           layout.addWidget(button, i % 4, i // 4)
-
-        self.setLayout(layout)
+        self.buttons = {}
+        self.setLayout(self.layout)
 
     def button_callback(self, button):
         if(self.buttons[button].isChecked()):
@@ -652,13 +669,26 @@ class OutputTab(QWidget):
         else:
             self.update_output_signal.emit(button, 0)
 
+    def update_layout(self, config):
+        clear_layout(self.layout)
+        self.buttons = {}
+        i = 0
+        for channel in config['digital'].keys():
+            self.buttons[channel] = QPushButton(channel)
+            self.buttons[channel].setEnabled(False)
+            self.buttons[channel].setCheckable(True)
+            self.buttons[channel].clicked.connect(lambda _, c = channel: self.button_callback(c))
+            self.layout.addWidget(self.buttons[channel], i // 2, i % 2)
+            i = i+1
+
+
     def update_config(self, config):
-        for i in range(config['digital']['quantity']):
-            self.buttons[i].setChecked(False)
-            if(config['digital']['settings'][i]['enabled'] and config['digital']['settings'][i]['mode'] == 'Output'):
-                self.buttons[i].setEnabled(True)
+        for channel in config['digital'].keys():
+            self.buttons[channel].setChecked(False)
+            if(config['digital'][channel]['enabled'] and config['digital'][channel]['mode'] == 'Output'):
+                self.buttons[channel].setEnabled(True)
             else:
-                self.buttons[i].setEnabled(False)
+                self.buttons[channel].setEnabled(False)
 
 # === Main Application ===
 class MainWindow(QWidget):
@@ -744,6 +774,7 @@ class MainWindow(QWidget):
 
         # Connect Configuration Signals
         self.config_tab.config_changed.connect(self.handle_config_update)
+        self.config_tab.structure_changed.connect(self.handle_config_structure_update)
 
         #stop DAQ
         self.stop_daq()
@@ -760,9 +791,10 @@ class MainWindow(QWidget):
     def file_exception(self, message):
         QMessageBox.critical(self,"Error", message)
 
-    @pyqtSlot(int, int)
+    @pyqtSlot(str, int)
     def input_update(self, button, value):
-        self.daq_worker.user_input(button, value)
+        print('update')
+        #self.daq_worker.user_input(button, value)
 
     def stop_daq(self):
         self.daq_worker.stop()
@@ -779,7 +811,11 @@ class MainWindow(QWidget):
         self.recording_tab.stop_recording()
         self.daq_worker.update_config(config)
         self.plots_tab.update_config(config)
-        #self.output_tab.update_config(config)
+        self.output_tab.update_config(config)
+
+    @pyqtSlot(dict)
+    def handle_config_structure_update(self, config):
+        self.output_tab.update_layout(config)
 
 # === Run App ===
 app = QApplication(sys.argv)
