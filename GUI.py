@@ -401,8 +401,9 @@ class ConfigTab(QWidget):
         
     def select_any_device(self):
         device = self.select_device(None)
-        self.config_data = make_default_config(device['name'])
-        self.update_ui_layout()
+        if(device):
+            self.config_data = make_default_config(device['name'])
+            self.update_ui_layout()
 
     def update_device_text(self):
         if(self.config_data['device']['model'] and self.config_data['device']['name']):
