@@ -32,6 +32,17 @@ def get_system_name_from_daq_name(daq_name: str) -> str:
         raise ValueError(f"Invalid channel string: {daq_name}")
     return daq_name.split('/', 1)[1]
 
+def null_config():
+    return {
+        'device': {
+            'model': None, 
+            'name': None, 
+            'sample_rate': None
+            },
+        'analog': {},
+        'digital': {}
+    }
+
 def make_default_config(name: str) -> dict:
     system = System.local()
     dev = system.devices[name]
@@ -57,7 +68,7 @@ def make_default_config(name: str) -> dict:
 
 # === DAQ Worker Thread (Dummy Data Generator) ===
 class DAQWorker(QThread):
-
+    configuration_exception = pyqtSignal(str) 
     def __init__(self, plot_queue, record_queue, record_flag, sample_rate_hz=100):
         super().__init__()
         self.plot_queue = plot_queue
@@ -229,7 +240,7 @@ class ConfigTab(QWidget):
     config_changed = pyqtSignal(dict)
     structure_changed = pyqtSignal(dict)
 
-    def __init__(self, config_data):
+    def __init__(self, config_data : dict):
         super().__init__()
         self.config_data = config_data
 
@@ -432,10 +443,12 @@ class ConfigTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Invalid sample rate: {e}")
 
-    
-
-    def validate_config(self, config):
-        pass
+    def reset_config(self):
+        if(self.config_data['device']['name']):
+            self.config_data = make_default_config(self.config_data['device']['name'])
+        else:
+            self.config_data = null_config()
+        self.update_ui_layout()
 
 
         
@@ -702,15 +715,7 @@ class MainWindow(QWidget):
         self.plot_queue = queue.Queue(maxsize=1000)
         self.record_queue = queue.Queue(maxsize=1000)
         self.recording_flag = threading.Event()
-        self.config_data = {
-            'device': {
-                'model': None, 
-                'name': None, 
-                'sample_rate': None
-                },
-            'analog': {},
-            'digital': {}
-        }
+        self.config_data = null_config()
 
         # DAQ Thread
         self.daq_worker = DAQWorker(self.plot_queue, self.record_queue, self.recording_flag, sample_rate_hz=50)
@@ -767,6 +772,7 @@ class MainWindow(QWidget):
 
         # Recording Thread
         self.recording_worker = RecordingWorker(self.record_queue, self.recording_flag)
+        self.recording_worker.configuration_exception.connect(self.handle_config_exception)
         
         # Connect Recording Signals
         self.recording_worker.file_exception.connect(self.file_exception)
@@ -817,6 +823,11 @@ class MainWindow(QWidget):
     @pyqtSlot(dict)
     def handle_config_structure_update(self, config):
         self.output_tab.update_layout(config)
+
+    @pyqtSlot(str)
+    def handle_config_exception(self, message : str):
+        self.config_tab.reset_config()
+        QMessageBox.critical(self,"Error", message)
 
 # === Run App ===
 app = QApplication(sys.argv)
