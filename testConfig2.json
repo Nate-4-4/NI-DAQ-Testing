@@ -2,11 +2,11 @@
     "device": {
         "model": "USB-6008",
         "name": "Dev1",
-        "sample_rate": 10
+        "sample_rate": 50.0
     },
     "analog": {
         "ai0": {
-            "enabled": false,
+            "enabled": true,
             "mode": "RSE",
             "modes": [
                 "RSE",
@@ -92,15 +92,15 @@
             ]
         },
         "port0/line3": {
-            "enabled": false,
-            "mode": "Input",
+            "enabled": true,
+            "mode": "Output",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
         "port0/line4": {
-            "enabled": false,
+            "enabled": true,
             "mode": "Input",
             "modes": [
                 "Input",
@@ -108,7 +108,7 @@
             ]
         },
         "port0/line5": {
-            "enabled": false,
+            "enabled": true,
             "mode": "Input",
             "modes": [
                 "Input",
@@ -132,23 +132,23 @@
             ]
         },
         "port1/line0": {
-            "enabled": false,
-            "mode": "Input",
+            "enabled": true,
+            "mode": "Output",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
         "port1/line1": {
-            "enabled": false,
-            "mode": "Input",
+            "enabled": true,
+            "mode": "Output",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
         "port1/line2": {
-            "enabled": false,
+            "enabled": true,
             "mode": "Input",
             "modes": [
                 "Input",

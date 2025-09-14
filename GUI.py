@@ -13,6 +13,7 @@ import math
 from nidaqmx.system import System
 import nidaqmx
 from nidaqmx.constants import AcquisitionType
+from nidaqmx.constants import TerminalConfiguration
 
 # === general functions ===
 
@@ -49,21 +50,23 @@ def null_config():
     }
 
 def make_default_config(name: str) -> dict:
-    system = System.local()
-    dev = system.devices[name]
-    config = {'device':{'model': dev.product_type, 'name': dev.name, 'sample_rate': 10}, 'analog':{}, 'digital':{}}
-    #detect analog channels
-    for ai_channel in list(dev.ai_physical_chans):
-        config['analog'][get_system_name_from_daq_name(ai_channel.name)] = {'enabled': False, 'mode': ai_channel.ai_term_cfgs[0].name, 'modes': [ch.name for ch in ai_channel.ai_term_cfgs]}
-    #detect digital channels
-    for digital_input_channel in dev.di_lines:
-        config['digital'][get_system_name_from_daq_name(digital_input_channel.name)] = {'enabled': False, 'mode': 'Input', 'modes': ['Input']}
-    for digital_output_channel in dev.do_lines:
-        if(digital_output_channel.name in [ch.name for ch in dev.di_lines]):
-            config['digital'][get_system_name_from_daq_name(digital_output_channel.name)]['modes'] = ["Input", "Output"]
-        else:
-            config['digital'][get_system_name_from_daq_name(digital_output_channel.name)] = {'enabled': False, 'mode': 'Output', 'modes': ['Output']}
-            
+    try:
+        system = System.local()
+        dev = system.devices[name]
+        config = {'device':{'model': dev.product_type, 'name': dev.name, 'sample_rate': 10}, 'analog':{}, 'digital':{}}
+        #detect analog channels
+        for ai_channel in list(dev.ai_physical_chans):
+            config['analog'][get_system_name_from_daq_name(ai_channel.name)] = {'enabled': False, 'mode': ai_channel.ai_term_cfgs[0].name, 'modes': [ch.name for ch in ai_channel.ai_term_cfgs]}
+        #detect digital channels
+        for digital_input_channel in dev.di_lines:
+            config['digital'][get_system_name_from_daq_name(digital_input_channel.name)] = {'enabled': False, 'mode': 'Input', 'modes': ['Input']}
+        for digital_output_channel in dev.do_lines:
+            if(digital_output_channel.name in [ch.name for ch in dev.di_lines]):
+                config['digital'][get_system_name_from_daq_name(digital_output_channel.name)]['modes'] = ["Input", "Output"]
+            else:
+                config['digital'][get_system_name_from_daq_name(digital_output_channel.name)] = {'enabled': False, 'mode': 'Output', 'modes': ['Output']}
+    except:
+        config = null_config()
     return config
     
     
@@ -80,11 +83,15 @@ class DAQWorker(QThread):
         self.record_queue = record_queue
         self.record_flag = record_flag
         self.sample_interval = None
-        self.active_channels = []
         self.user_input_channels = []
-        self.user_inputs = [0 for _ in range(0,8)]
+        self.digital_channels = []
+        self.analog_channels = []
+        self.user_inputs = {}
         self.running = False
-        self.start_time = 0
+
+        self.no_analog = True
+        self.no_digital_in = True
+        self.no_digital_out = True
 
         self.analog_task = None
         self.digital_input_task = None
@@ -92,58 +99,147 @@ class DAQWorker(QThread):
 
     def run(self):
         self.running = True
-        if(self.analog_task):
+        if(self.analog_task and not self.no_analog):
             self.analog_task.start()
-        self.start_time = time.time()
-        if(self.digital_input_task):
+        if(self.digital_input_task and not self.no_digital_in):
             self.digital_input_task.start()
-        num_analog_samples = 0
-        while self.running:
-            analog_samples = self.analog_task.read(number_of_samples_per_channel=nidaqmx.constants.READ_ALL_AVAILABLE)
-            current_num_analog_samples = 0
-            if(analog_samples):
-                try:
-                    current_num_analog_samples = len(analog_samples[0])
-                except TypeError:
-                    current_num_analog_samples = 0
-            analog_timestamps = [self.sample_interval * i for i in range(num_analog_samples, num_analog_samples + current_num_analog_samples)]
-            num_analog_samples =  num_analog_samples + current_num_analog_samples
-            if(current_num_analog_samples>0):
+        if(self.no_analog):
+            self.run_no_analog()
+        else:
+            self.run_analog_mode()
+
+    def run_analog_mode(self):
+        total_num_analog_samples = 0
+        try:
+            while self.running:
+                analog_samples = self.analog_task.read(number_of_samples_per_channel=nidaqmx.constants.READ_ALL_AVAILABLE)
+                current_num_analog_samples = 0
+                if(analog_samples):
+                    try:
+                        current_num_analog_samples = len(analog_samples[0])
+                    except TypeError:
+                        current_num_analog_samples = 1
+                        analog_samples = [analog_samples]
+                analog_timestamps = [self.sample_interval * i for i in range(total_num_analog_samples, total_num_analog_samples + current_num_analog_samples)]
+                total_num_analog_samples =  total_num_analog_samples + current_num_analog_samples
+                if(current_num_analog_samples>0):
+                    if(self.no_digital_in):
+                        digital_samples = [[]]
+                    else:
+                        digital_sample = self.digital_input_task.read()
+                        try:
+                            digital_samples = [[sample] * current_num_analog_samples for sample in digital_sample]
+                        except TypeError:
+                            digital_samples = [[digital_sample]]
+                    user_data = [[self.user_inputs[channel]] * current_num_analog_samples for channel in self.user_input_channels]
+                    self.queue_data(analog_timestamps, analog_samples, digital_samples, user_data)
+                self.set_outputs()
+                time.sleep(self.sample_interval/2)
+        except:
+            self.configuration_exception.emit("DAQ Encountered an Error")
+
+    def run_no_analog(self):
+        start_time = time.time()
+        while(self.running):
+            if(self.no_digital_in):
+                digital_samples = [[]]
+            else:
                 digital_sample = self.digital_input_task.read()
-                digital_samples = [[sample] * current_num_analog_samples for sample in digital_sample]
-                print("---")
-                print(analog_samples)
-                print(digital_samples)
-                print(analog_timestamps)
-            time.sleep(self.sample_interval/2)
+                try:
+                    digital_samples = [[sample] for sample in digital_sample]
+                except TypeError:
+                    digital_samples = [[digital_sample]]
+            timestamp = [time.time() - start_time]
+            user_data = [[self.user_inputs[channel]] for channel in self.user_input_channels]
+            self.queue_data(timestamp, [[]], digital_samples, user_data)
+            self.set_outputs()
+            time.sleep(self.sample_interval)
+
+    def queue_data(self, time, analog, digital_in, digital_out):
+        num_packets = len(time)
+        packets = [{'timestamp':t} for t in time]
+        #format analog
+        for i in range(0, len(self.analog_channels)):
+            for j in range(0,num_packets):
+                packets[j][self.analog_channels[i]] = analog[i][j]
+        #format digital input
+        for i in range(0, len(self.digital_channels)):
+            for j in range(0,num_packets):
+                packets[j][self.digital_channels[i]] = digital_in[i][j]
+        #format digital output
+        for i in range(0, len(self.user_input_channels)):
+            for j in range(0,num_packets):
+                packets[j][self.user_input_channels[i]] = digital_out[i][j]
+        #load into queues
+        for packet in packets:
+            if(self.record_flag.is_set()):
+                self.record_queue.put_nowait(packet)
+            self.plot_queue.put_nowait(packet)
+
+    def set_outputs(self):
+        if(not self.no_digital_out):
+            output_data = [self.user_inputs[channel] == 1 for channel in self.user_input_channels]
+            self.digital_output_task.write(output_data)
 
     def stop(self):
         self.running = False
+        try:
+            if(self.analog_task):
+                self.analog_task.stop()
+            if(self.digital_input_task):
+                self.digital_input_task.stop()
+            if(self.digital_output_task):
+                self.digital_output_task.stop()
+        except:
+            self.analog_task = None
+            self.digital_input_task = None
+            self.digital_output_task = None
         self.wait()
 
     def update_config(self, config):
-        if(self.analog_task):
-            self.analog_task.close()
-        self.analog_task = nidaqmx.Task()
-        for channel in config['analog'].keys():
-            if(config['analog'][channel]['enabled']):
-                self.analog_task.ai_channels.add_ai_voltage_chan(make_daq_name(config['device']['name'], channel))
-        self.analog_task.timing.cfg_samp_clk_timing(rate = config['device']['sample_rate'], sample_mode=AcquisitionType.CONTINUOUS)
-
-        if(self.digital_input_task):
-            self.digital_input_task.close()
-        self.digital_input_task = nidaqmx.Task()
-        for channel in config['digital'].keys():
-            if(config['digital'][channel]['enabled'] and config['digital'][channel]['mode'] == 'Input'):
-                self.digital_input_task.di_channels.add_di_chan(make_daq_name(config['device']['name'], channel))
-
-        self.sample_interval = 1.0 / config['device']['sample_rate']
-
-        self.user_inputs = {}
-        for channel in config['digital'].keys():
-            self.active_channels.append(channel)
-            if(config['digital'][channel]['enabled'] and config['digital'][channel]['mode'] == 'Input'):
-                self.user_inputs[channel] = 0
+        #analog input task
+        try:
+            self.analog_channels = []
+            self.no_analog = True
+            if(self.analog_task):
+                self.analog_task.close()
+            self.analog_task = nidaqmx.Task()
+            for channel in config['analog'].keys():
+                if(config['analog'][channel]['enabled']):
+                    self.analog_task.ai_channels.add_ai_voltage_chan(make_daq_name(config['device']['name'], channel), terminal_config=TerminalConfiguration[config['analog'][channel]['mode']])
+                    self.no_analog = False
+                    self.analog_channels.append(channel)
+            if(not self.no_analog):
+                self.analog_task.timing.cfg_samp_clk_timing(rate = config['device']['sample_rate'], sample_mode=AcquisitionType.CONTINUOUS)
+            #digital input task
+            self.digital_channels = []
+            self.no_digital_in = True
+            if(self.digital_input_task):
+                self.digital_input_task.close()
+            self.digital_input_task = nidaqmx.Task()
+            for channel in config['digital'].keys():
+                if(config['digital'][channel]['enabled'] and config['digital'][channel]['mode'] == 'Input'):
+                    self.digital_input_task.di_channels.add_di_chan(make_daq_name(config['device']['name'], channel))
+                    self.no_digital_in = False
+                    self.digital_channels.append(channel)
+            #set sample rate
+            self.sample_interval = 1.0 / config['device']['sample_rate']
+            #digital output task
+            self.no_digital_out = True
+            self.user_inputs = {}
+            self.user_input_channels = []
+            if(self.digital_output_task):
+                self.digital_output_task.close()
+            self.digital_output_task = nidaqmx.Task()
+            for channel in config['digital'].keys():
+                if(config['digital'][channel]['enabled'] and config['digital'][channel]['mode'] == 'Output'):
+                    self.user_inputs[channel] = 0
+                    self.user_input_channels.append(channel)
+                    self.digital_output_task.do_channels.add_do_chan(make_daq_name(config['device']['name'], channel))
+                    self.no_digital_out = False
+        except:
+            self.configuration_exception.emit("Error Configuring DAQ")
+    
             
 
     def user_input(self, channel, value):
@@ -464,7 +560,8 @@ class PlotsTab(QWidget):
         super().__init__()
         self.data_queue = data_queue
 
-        self.max_points = 500
+        self.max_time = 10
+        self.max_points = 100
         self.x_data = []
         self.y_data = {}  # analog channel index -> list of samples
         self.bool_data = {} # digital channel index -> list of samples
@@ -472,9 +569,23 @@ class PlotsTab(QWidget):
         self.waveforms = {} # digital channel index -> pg.PlotDataItem
 
         layout = QVBoxLayout()
+        #plot width selection
+        selection_layout = QHBoxLayout()
+        self.width_text = QLabel("Max Plot Width: 10s (Must restart DAQ to take effect)")
+        width_selection_button = QPushButton("Set Plot Width")
+        width_selection_button.clicked.connect(self.plot_width_changed)
+        self.width_selection_box = QLineEdit()
+        width_unit = QLabel("s")
+        layout.addWidget(self.width_text)
+        selection_layout.addWidget(width_selection_button)
+        selection_layout.addWidget(self.width_selection_box)
+        selection_layout.addWidget(width_unit)
+        layout.addLayout(selection_layout)
+        #analog plot
         self.plot_widget = pg.PlotWidget(title="Live DAQ Analog Data")
         self.plot_widget.setLabel('left', 'Voltage', units='V')
         self.plot_widget.setLabel('bottom', 'Time', units='s')
+        #digital plot
         self.digital_plot_widget = pg.PlotWidget(title="Live DAQ Digital Data")
         self.digital_plot_widget.setLabel('left', 'Logic Value')
         self.digital_plot_widget.setLabel('bottom', 'Time', units='s')
@@ -496,7 +607,7 @@ class PlotsTab(QWidget):
             self.x_data.append(sample['timestamp'])
 
             for ch_idx in self.active_channels:
-                ch_name = f"AI{ch_idx}"
+                ch_name = ch_idx
                 if ch_name in sample:
                     self.y_data[ch_idx].append(sample[ch_name])
                 else:
@@ -504,11 +615,11 @@ class PlotsTab(QWidget):
 
             for i in range(0,len(self.active_digital_channels)):
                 ch_idx = self.active_digital_channels[i]
-                ch_name = f"DIO{ch_idx}"
+                ch_name = ch_idx
                 if ch_name in sample:
-                    self.bool_data[ch_idx].append(self.binaryPlotValue(i, sample[ch_name]))
+                    self.bool_data[ch_idx].append(PlotsTab.binaryPlotValue(i, sample[ch_name]))
                 else:
-                    self.bool_data[ch_idx].append(self.binaryPlotValue(i, 0))
+                    self.bool_data[ch_idx].append(PlotsTab.binaryPlotValue(i, 0))
 
             updated = True
 
@@ -584,14 +695,31 @@ class PlotsTab(QWidget):
         # === GENERAL ===
         #reset timestamps
         self.x_data = []
+        #set max samples
+        self.max_points = int(self.max_time * config['device']['sample_rate'])
     
-    def binaryPlotValue(self, index, truthValue):
+    def binaryPlotValue(index, truthValue):
         position = index + 0.5
         if(truthValue):
             position = position + 1/3.0
         else:
             position = position - 1/3.0
         return position
+    
+    def plot_width_changed(self):
+        input_val = self.width_selection_box.text()
+        try:
+            if not input_val:
+                raise Exception("No value")
+            value = float(input_val)
+            if(value <= 0):
+                raise Exception("Plot width cannot be negative")
+            if(value > 1e5):
+                raise Exception("Plot width is too large")
+            self.max_time = value
+            self.width_text.setText(f"Max Plot Width: {input_val}s (Must restart DAQ to take effect)")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Invalid plot width: {e}")
         
         
 
@@ -803,15 +931,14 @@ class MainWindow(QWidget):
 
     @pyqtSlot(str, int)
     def input_update(self, button, value):
-        print('update')
-        #self.daq_worker.user_input(button, value)
+        self.daq_worker.user_input(button, value)
 
     def stop_daq(self):
         self.daq_worker.stop()
         self.recording_tab.stop_recording()
 
     def start_daq(self):
-        #self.handle_config_update(self.config_data)
+        self.plots_tab.update_config(self.config_data)
         self.daq_worker.start()
 
     @pyqtSlot(dict)
@@ -829,7 +956,8 @@ class MainWindow(QWidget):
         self.output_tab.update_layout(config)
 
     @pyqtSlot(str)
-    def handle_config_exception(self, message : str):
+    def handle_config_exception(self, message):
+        self.stop_daq()
         self.config_tab.reset_config()
         QMessageBox.critical(self,"Error", message)
 
