@@ -58,11 +58,11 @@ While the DAQ is running, digital output signals can be controled using buttons 
 
 While the DAQ is running, the analog signals and digital waveforms that have been configured are plotted in the *Plotting Section*. The *Plotting Section* can be selected at the top of the window. There is one plot for the analog signals and one plot for the digital wavefroms. 
 
-![alt text](media/Plot.png "Image showing plots")
+![alt text](media/Plot.PNG "Image showing plots")
 
 Plot axes automatically scale. The x-axis (time) is limited by the **Max Plot Width** option. This keeps the plots from becoming too dense after the DAQ has run for a long time. It can be changed by entering a new value in the box at the top of the *Plotting Section* and pressing the **Set Plot Width** button. The max plot width will only update if the DAQ is stoped and restarted. 
 
-![alt text](media/Axes.png "Image demonstrating how to change the x-axis max scaling")
+![alt text](media/Axes.PNG "Image demonstrating how to change the x-axis max scaling")
 
 
 
