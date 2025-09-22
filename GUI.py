@@ -50,23 +50,20 @@ def null_config():
     }
 
 def make_default_config(name: str) -> dict:
-    try:
-        system = System.local()
-        dev = system.devices[name]
-        config = {'device':{'model': dev.product_type, 'name': dev.name, 'sample_rate': 10}, 'analog':{}, 'digital':{}}
-        #detect analog channels
-        for ai_channel in list(dev.ai_physical_chans):
-            config['analog'][get_system_name_from_daq_name(ai_channel.name)] = {'enabled': False, 'mode': ai_channel.ai_term_cfgs[0].name, 'modes': [ch.name for ch in ai_channel.ai_term_cfgs]}
-        #detect digital channels
-        for digital_input_channel in dev.di_lines:
-            config['digital'][get_system_name_from_daq_name(digital_input_channel.name)] = {'enabled': False, 'mode': 'Input', 'modes': ['Input']}
-        for digital_output_channel in dev.do_lines:
-            if(digital_output_channel.name in [ch.name for ch in dev.di_lines]):
-                config['digital'][get_system_name_from_daq_name(digital_output_channel.name)]['modes'] = ["Input", "Output"]
-            else:
-                config['digital'][get_system_name_from_daq_name(digital_output_channel.name)] = {'enabled': False, 'mode': 'Output', 'modes': ['Output']}
-    except:
-        config = null_config()
+    system = System.local()
+    dev = system.devices[name]
+    config = {'device':{'model': dev.product_type, 'name': dev.name, 'sample_rate': 10}, 'analog':{}, 'digital':{}}
+    #detect analog channels
+    for ai_channel in list(dev.ai_physical_chans):
+        config['analog'][get_system_name_from_daq_name(ai_channel.name)] = {'enabled': False, 'mode': ai_channel.ai_term_cfgs[0].name, 'modes': [ch.name for ch in ai_channel.ai_term_cfgs]}
+    #detect digital channels
+    for digital_input_channel in dev.di_lines:
+        config['digital'][get_system_name_from_daq_name(digital_input_channel.name)] = {'enabled': False, 'mode': 'Input', 'modes': ['Input']}
+    for digital_output_channel in dev.do_lines:
+        if(digital_output_channel.name in [ch.name for ch in dev.di_lines]):
+            config['digital'][get_system_name_from_daq_name(digital_output_channel.name)]['modes'] = ["Input", "Output"]
+        else:
+            config['digital'][get_system_name_from_daq_name(digital_output_channel.name)] = {'enabled': False, 'mode': 'Output', 'modes': ['Output']}
     return config
     
     
