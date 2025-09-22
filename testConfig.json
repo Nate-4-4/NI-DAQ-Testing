@@ -59,6 +59,13 @@
             ]
         },
         "ai7": {
+	    "enabled": false,
+            "mode": "RSE",
+            "modes": [
+                "RSE"
+            ]
+        },
+	"ai8": {
             "enabled": false,
             "mode": "RSE",
             "modes": [
