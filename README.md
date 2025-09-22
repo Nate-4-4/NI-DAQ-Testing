@@ -1,6 +1,6 @@
 # NI-DAQ GUI Monitor
 
-The NI-DAQ-Monitor is a Graphical User Interface (GUI) that allows you to configure NI-DAQ devices, plot readings & waveforms in real time, and actvate of digital output pins. It was created by [Nathan Hardie](GitHub.com/Nate-4-4) for use in research conducted at [Aero-Propulsion, Mechatronics, and Energy](https://ame.fsu.edu).
+The NI-DAQ-Monitor is a Graphical User Interface (GUI) that allows you to configure NI-DAQ devices, plot readings & waveforms in real time, and actvate of digital output pins. It was created by [Nathan Hardie](https://github.com/Nate-4-4) for use in research conducted at [Aero-Propulsion, Mechatronics, and Energy](https://ame.fsu.edu).
 
 ## Repository Structure
 
