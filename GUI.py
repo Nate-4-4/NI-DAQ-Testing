@@ -1,6 +1,5 @@
 import sys
 import time
-import random
 import queue
 import csv
 from PyQt5.QtWidgets import QApplication, QWidget, QTabWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QComboBox, QPushButton, QFileDialog, QMessageBox, QGroupBox, QGridLayout, QDialog, QDialogButtonBox, QLineEdit
@@ -8,7 +7,6 @@ from PyQt5.QtCore import QThread, QTimer, pyqtSignal, pyqtSlot, Qt
 import pyqtgraph as pg
 import threading
 import json
-import math
 
 from nidaqmx.system import System
 import nidaqmx

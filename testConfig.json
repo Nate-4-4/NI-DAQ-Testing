@@ -2,20 +2,20 @@
     "device": {
         "model": "USB-6008",
         "name": "Dev1",
-        "sample_rate": 25.0
+        "sample_rate": 50.0
     },
     "analog": {
         "ai0": {
             "enabled": true,
-            "mode": "RSE",
+            "mode": "DIFFERENTIAL",
             "modes": [
                 "RSE",
                 "DIFFERENTIAL"
             ]
         },
         "ai1": {
-            "enabled": true,
-            "mode": "DIFFERENTIAL",
+            "enabled": false,
+            "mode": "RSE",
             "modes": [
                 "RSE",
                 "DIFFERENTIAL"
@@ -59,13 +59,6 @@
             ]
         },
         "ai7": {
-	    "enabled": false,
-            "mode": "RSE",
-            "modes": [
-                "RSE"
-            ]
-        },
-	"ai8": {
             "enabled": false,
             "mode": "RSE",
             "modes": [
@@ -91,7 +84,7 @@
             ]
         },
         "port0/line2": {
-            "enabled": true,
+            "enabled": false,
             "mode": "Input",
             "modes": [
                 "Input",
@@ -100,14 +93,14 @@
         },
         "port0/line3": {
             "enabled": true,
-            "mode": "Input",
+            "mode": "Output",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
         "port0/line4": {
-            "enabled": false,
+            "enabled": true,
             "mode": "Input",
             "modes": [
                 "Input",
@@ -115,7 +108,7 @@
             ]
         },
         "port0/line5": {
-            "enabled": false,
+            "enabled": true,
             "mode": "Input",
             "modes": [
                 "Input",
@@ -123,8 +116,8 @@
             ]
         },
         "port0/line6": {
-            "enabled": true,
-            "mode": "Output",
+            "enabled": false,
+            "mode": "Input",
             "modes": [
                 "Input",
                 "Output"
@@ -139,23 +132,23 @@
             ]
         },
         "port1/line0": {
-            "enabled": false,
-            "mode": "Input",
+            "enabled": true,
+            "mode": "Output",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
         "port1/line1": {
-            "enabled": false,
-            "mode": "Input",
+            "enabled": true,
+            "mode": "Output",
             "modes": [
                 "Input",
                 "Output"
             ]
         },
         "port1/line2": {
-            "enabled": false,
+            "enabled": true,
             "mode": "Input",
             "modes": [
                 "Input",
